@@ -1,0 +1,14 @@
+# Databricks Apps runtime config for Certus.
+# A FastAPI backend (server/app.py) serves the built dist/ SPA and a small CRUD
+# API backed by Lakebase Postgres. Run via a shell so ${DATABRICKS_APP_PORT} is
+# expanded (the Apps runtime does not substitute env vars inside command args).
+command:
+  - sh
+  - -c
+  - 'uvicorn server.app:app --host 0.0.0.0 --port "${DATABRICKS_APP_PORT:-8000}"'
+
+# PGHOST / PGPORT / PGDATABASE / PGUSER / PGSSLMODE are auto-injected by the
+# platform from the `postgres` app resource; only LAKEBASE_ENDPOINT is explicit.
+env:
+  - name: LAKEBASE_ENDPOINT
+    valueFrom: postgres

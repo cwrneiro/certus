@@ -1,0 +1,171 @@
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-5) var(--space-4) var(--space-4);
+  background: var(--bg-elevated);
+  border-right: 1px solid var(--border);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-2);
+  margin-bottom: var(--space-6);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  border-radius: var(--r-sm);
+}
+
+.wordmark {
+  font-size: var(--text-lg);
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+}
+
+.close {
+  display: none;
+  color: var(--ink-muted);
+  padding: 0.375rem;
+  border-radius: var(--r-sm);
+}
+.close:hover {
+  color: var(--ink);
+  background: var(--surface-hover);
+}
+
+.nav {
+  flex: 1;
+}
+
+.nav ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.navItem {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5625rem 0.75rem;
+  border-radius: var(--r-md);
+  color: var(--ink-muted);
+  font-size: var(--text-base);
+  font-weight: 500;
+  transition: background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.navItem:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+.navItem svg {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.navItem[data-active='true'] {
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+.navItem[data-active='true'] svg {
+  opacity: 1;
+}
+
+/* Active rail marker — the one warm light on the nav */
+.navItem[data-active='true']::before {
+  content: '';
+  position: absolute;
+  left: -0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 1.35rem;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+}
+
+.count {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+  background: var(--surface-sunken);
+  border-radius: var(--r-pill);
+  min-width: 1.25rem;
+  height: 1.25rem;
+  display: grid;
+  place-items: center;
+  padding: 0 0.375rem;
+}
+.navItem[data-active='true'] .count {
+  color: var(--accent);
+  background: transparent;
+}
+
+.foot {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+/* Scrim only matters on mobile */
+.scrim {
+  display: none;
+}
+
+/* ---- Mobile: drawer ------------------------------------- */
+@media (max-width: 860px) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: var(--z-overlay);
+    transform: translateX(-100%);
+    transition: transform var(--dur) var(--ease-out);
+    box-shadow: var(--shadow-pop);
+  }
+  .sidebar[data-open='true'] {
+    transform: translateX(0);
+  }
+  .close {
+    display: grid;
+    place-items: center;
+  }
+  .scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--z-overlay) - 1);
+    background: oklch(0 0 0 / 0.5);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--dur) var(--ease-out);
+  }
+  .scrim[data-open='true'] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .scrim {
+    transition: none;
+  }
+}

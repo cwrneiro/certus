@@ -1,0 +1,63 @@
+.wrap {
+  max-width: 34rem;
+  margin: 12vh auto 0;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-6) var(--space-4);
+}
+
+.mark {
+  display: grid;
+  place-items: center;
+  width: 4rem;
+  height: 4rem;
+  border-radius: var(--r-lg);
+  color: var(--accent);
+  background: var(--accent-soft);
+  margin-bottom: var(--space-5);
+}
+
+.title {
+  font-size: var(--text-2xl);
+  font-weight: 680;
+  letter-spacing: -0.02em;
+  margin-bottom: var(--space-3);
+}
+
+.body {
+  font-size: var(--text-md);
+  color: var(--ink-muted);
+  line-height: var(--leading-normal);
+  max-width: 42ch;
+  margin-bottom: var(--space-6);
+}
+
+.cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6875rem 1.25rem;
+  border-radius: var(--r-md);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: var(--text-base);
+  font-weight: 600;
+  transition: background var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.cta:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+.cta:active {
+  transform: translateY(0);
+  background: var(--accent-press);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cta:hover {
+    transform: none;
+  }
+}

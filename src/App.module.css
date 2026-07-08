@@ -1,0 +1,59 @@
+.app {
+  display: flex;
+  align-items: flex-start;
+  min-height: 100dvh;
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  min-height: 100dvh;
+}
+
+/* ---- Mobile top bar ------------------------------------- */
+.mobileBar {
+  display: none;
+  align-items: center;
+  gap: 0.75rem;
+  padding: var(--space-3) var(--space-4);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  background: color-mix(in oklch, var(--bg) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+}
+
+.menuBtn {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--r-md);
+  color: var(--ink);
+}
+.menuBtn:hover {
+  background: var(--surface-hover);
+}
+
+.mobileBrand {
+  font-size: var(--text-md);
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+/* ---- Shared page container ------------------------------ */
+.content {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--space-7) var(--space-7) var(--space-9);
+}
+
+@media (max-width: 860px) {
+  .mobileBar {
+    display: flex;
+  }
+  .content {
+    padding: var(--space-5) var(--space-4) var(--space-8);
+  }
+}

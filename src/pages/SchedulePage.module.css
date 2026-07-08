@@ -1,0 +1,278 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.sectionHead {
+  font-size: var(--text-lg);
+  font-weight: 640;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.sectionBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+/* ---- Upcoming exams ------------------------------------ */
+.upcoming {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr));
+  gap: var(--space-4);
+}
+
+.examCard {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  text-align: left;
+  padding: var(--space-4) var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  transition: border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.examCard:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover);
+}
+
+.examCountdown {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 4.5rem;
+  padding: var(--space-3) 0;
+  border-radius: var(--r-md);
+  background: var(--info-soft);
+  color: var(--info);
+}
+.examDays {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  line-height: 1;
+}
+.examUnit {
+  font-size: var(--text-xs);
+  font-weight: 550;
+  margin-top: 0.1875rem;
+}
+
+.examBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  min-width: 0;
+  flex: 1;
+}
+.examName {
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  line-height: var(--leading-snug);
+}
+.examDate {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.examGo {
+  flex-shrink: 0;
+  color: var(--ink-faint);
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.examCard:hover .examGo,
+.examCard:focus-visible .examGo {
+  opacity: 1;
+  transform: translateX(0);
+  color: var(--accent);
+}
+
+/* ---- Empty rows ---------------------------------------- */
+.emptyRow {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: var(--space-5);
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-lg);
+  color: var(--ink-muted);
+  font-size: var(--text-base);
+}
+.emptyIcon {
+  flex-shrink: 0;
+  color: var(--ink-faint);
+}
+
+/* ---- Timeline ------------------------------------------ */
+.timeline {
+  display: flex;
+  flex-direction: column;
+}
+
+.event {
+  position: relative;
+}
+
+.eventLink {
+  display: flex;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-3) var(--space-3) 0;
+  border-radius: var(--r-md);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+a.eventLink:hover {
+  background: var(--surface-hover);
+}
+.eventLink[data-static='true'] {
+  cursor: default;
+}
+
+/* The connecting rail runs through the dot column */
+.dot {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  border: 2px solid var(--track);
+  color: var(--on-accent);
+}
+.dot[data-tone='pass'],
+.dot[data-tone='passed'] {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.dot[data-tone='below'] {
+  border-color: var(--warn);
+  background: var(--surface);
+}
+/* Vertical connector between successive dots */
+.event:not(:last-child) .dot::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: calc(100% + var(--space-3) * 2);
+  background: var(--track);
+  z-index: -1;
+}
+
+.eventBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-top: 0.0625rem;
+  min-width: 0;
+}
+
+.eventTop {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.score {
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--ink);
+}
+.score[data-tone='below'] {
+  color: var(--warn);
+}
+.score[data-tone='pass'],
+.score[data-tone='passed'] {
+  color: var(--accent);
+}
+.eventLabel {
+  font-size: var(--text-base);
+  font-weight: 550;
+  color: var(--ink);
+}
+.eventExt {
+  color: var(--ink-faint);
+  opacity: 0;
+  align-self: center;
+  transition: opacity var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+a.eventLink:hover .eventExt,
+a.eventLink:focus-visible .eventExt {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.eventMeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4375rem;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+.gap {
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+}
+.gap[data-tone='pass'] {
+  color: var(--accent);
+}
+.gap[data-tone='below'] {
+  color: var(--warn);
+}
+
+@media (max-width: 560px) {
+  .upcoming {
+    grid-template-columns: 1fr;
+  }
+  .examGo {
+    opacity: 1;
+    transform: none;
+  }
+  .eventExt {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .examCard:hover {
+    transform: none;
+  }
+  .examCard:hover .examGo {
+    transform: none;
+  }
+}

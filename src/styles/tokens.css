@@ -1,0 +1,158 @@
+/* ============================================================
+   Certification Tracker — design tokens
+   "The Warm Ledger": a soft rose-tinted page with white cards and
+   one deep-rose accent that carries progress + success. Amber flags
+   below-the-line topics; blue marks a booked exam. Light is the
+   default; a rose-accented dark theme ships alongside.
+   ============================================================ */
+
+:root {
+  /* ---- Typography ---------------------------------------- */
+  --font-sans: 'Figtree', ui-sans-serif, system-ui, -apple-system,
+    'Segoe UI', Roboto, sans-serif;
+
+  /* Fixed rem scale (product UI), ~1.2 ratio */
+  --text-xs: 0.75rem; /* 12 */
+  --text-sm: 0.8125rem; /* 13 */
+  --text-base: 0.9375rem; /* 15 */
+  --text-md: 1.0625rem; /* 17 */
+  --text-lg: 1.25rem; /* 20 */
+  --text-xl: 1.5rem; /* 24 */
+  --text-2xl: 1.875rem; /* 30 */
+  --text-3xl: 2.25rem; /* 36 */
+
+  --leading-tight: 1.15;
+  --leading-snug: 1.35;
+  --leading-normal: 1.55;
+
+  /* ---- Spacing (4px base) -------------------------------- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 2.5rem;
+  --space-8: 3rem;
+  --space-9: 4rem;
+
+  /* ---- Radii --------------------------------------------- */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+  --r-pill: 999px;
+
+  /* ---- Motion -------------------------------------------- */
+  --dur-fast: 130ms;
+  --dur: 200ms;
+  --dur-slow: 320ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1); /* ease-out-quint-ish */
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* ---- Z-index scale ------------------------------------- */
+  --z-sticky: 100;
+  --z-dropdown: 200;
+  --z-overlay: 300;
+  --z-toast: 400;
+
+  /* ---- Layout -------------------------------------------- */
+  --sidebar-w: 15rem;
+  --content-max: 74rem;
+}
+
+/* ============================================================
+   LIGHT THEME (default)
+   Cool-neutral off-white — not cream. Emerald deepened so it
+   stays legible with white text on buttons and against white.
+   ============================================================ */
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  /* ---- Shared neutrals for all preview palettes ------------
+     Warm pastel page + white cards (bases #F2C7C7 #FFFFFF
+     #D5F3D8 #FFB7C5). Brand hues come from [data-palette] below. */
+  --bg: oklch(0.955 0.022 14); /* faint rose page */
+  --bg-elevated: oklch(0.975 0.015 14);
+  --surface: oklch(1 0 0); /* #FFFFFF cards */
+  --surface-hover: oklch(0.972 0.012 14);
+  --surface-sunken: oklch(0.91 0.032 14); /* ~ #F2C7C7 */
+
+  --border: oklch(0.885 0.024 14);
+  --border-strong: oklch(0.8 0.032 14);
+
+  --ink: oklch(0.3 0.028 14);
+  --ink-muted: oklch(0.46 0.03 14);
+  --ink-faint: oklch(0.5 0.03 14);
+
+  --track: oklch(0.9 0.02 14);
+
+  --info: oklch(0.5 0.12 250);
+  --info-soft: oklch(0.5 0.12 250 / 0.12);
+  --neutral-chip: oklch(0.46 0.02 14);
+  --neutral-chip-soft: oklch(0.46 0.02 14 / 0.1);
+
+  /* Rose brand — carries progress, success, and the primary action */
+  --accent: oklch(0.53 0.18 12);
+  --accent-hover: oklch(0.48 0.18 12);
+  --accent-press: oklch(0.44 0.17 12);
+  --accent-soft: oklch(0.53 0.18 12 / 0.14);
+  --accent-ring: oklch(0.53 0.18 12 / 0.45);
+  --on-accent: oklch(0.99 0.01 20);
+  --ok: oklch(0.53 0.18 12);
+  --ok-soft: oklch(0.53 0.18 12 / 0.14);
+  --warn: oklch(0.52 0.12 58);
+  --warn-soft: oklch(0.62 0.13 60 / 0.16);
+  --focus-ring: oklch(0.53 0.18 12);
+
+  --shadow-hover: 0 1px 2px oklch(0.4 0.05 14 / 0.08),
+    0 10px 28px oklch(0.4 0.05 14 / 0.12);
+  --shadow-pop: 0 2px 8px oklch(0.4 0.05 14 / 0.12),
+    0 18px 44px oklch(0.4 0.05 14 / 0.16);
+}
+
+/* ============================================================
+   DARK THEME
+   Warm-neutral charcoal (faint rose tint). Brightened rose so the
+   accent reads on the dark surface.
+   ============================================================ */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: oklch(0.2 0.006 14);
+  --bg-elevated: oklch(0.235 0.008 14);
+  --surface: oklch(0.255 0.009 14);
+  --surface-hover: oklch(0.3 0.011 14);
+  --surface-sunken: oklch(0.225 0.008 14);
+
+  --border: oklch(0.335 0.011 14);
+  --border-strong: oklch(0.43 0.014 14);
+
+  --ink: oklch(0.955 0.005 14);
+  --ink-muted: oklch(0.775 0.01 14);
+  --ink-faint: oklch(0.65 0.012 14);
+
+  --accent: oklch(0.68 0.17 14);
+  --accent-hover: oklch(0.73 0.17 14);
+  --accent-press: oklch(0.62 0.16 14);
+  --accent-soft: oklch(0.68 0.17 14 / 0.18);
+  --accent-ring: oklch(0.68 0.17 14 / 0.5);
+  --on-accent: oklch(0.16 0.03 14);
+
+  --track: oklch(0.31 0.01 14);
+
+  --ok: oklch(0.68 0.17 14);
+  --ok-soft: oklch(0.68 0.17 14 / 0.18);
+  --info: oklch(0.72 0.1 240);
+  --info-soft: oklch(0.72 0.1 240 / 0.16);
+  --warn: oklch(0.82 0.12 72);
+  --warn-soft: oklch(0.82 0.12 72 / 0.16);
+  --neutral-chip: oklch(0.73 0.01 14);
+  --neutral-chip-soft: oklch(0.73 0.01 14 / 0.14);
+
+  --focus-ring: oklch(0.72 0.15 14);
+
+  --shadow-hover: 0 1px 2px oklch(0 0 0 / 0.3), 0 8px 24px oklch(0 0 0 / 0.28);
+  --shadow-pop: 0 2px 6px oklch(0 0 0 / 0.35), 0 16px 40px oklch(0 0 0 / 0.4);
+}

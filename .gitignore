@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Environment / secrets
+.env
+.env.*
+
+# Impeccable local caches (keep config.json + design.json)
+.impeccable/hook.cache.json
+.impeccable/config.local.json
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/

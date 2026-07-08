@@ -1,0 +1,199 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-07T00:00:00Z",
+  "title": "Design System: Certification Tracker",
+  "extensions": {
+    "colorMeta": {
+      "rose": {
+        "role": "primary",
+        "displayName": "Deep Rose",
+        "canonical": "oklch(0.53 0.18 12)",
+        "tonalRamp": [
+          "oklch(0.30 0.12 12)",
+          "oklch(0.38 0.15 12)",
+          "oklch(0.44 0.17 12)",
+          "oklch(0.53 0.18 12)",
+          "oklch(0.63 0.17 13)",
+          "oklch(0.74 0.13 14)",
+          "oklch(0.86 0.07 14)",
+          "oklch(0.95 0.03 14)"
+        ]
+      },
+      "rose-page": {
+        "role": "neutral",
+        "displayName": "Rose Page",
+        "canonical": "oklch(0.955 0.022 14)",
+        "tonalRamp": [
+          "oklch(0.20 0.006 14)",
+          "oklch(0.30 0.02 14)",
+          "oklch(0.46 0.03 14)",
+          "oklch(0.62 0.03 14)",
+          "oklch(0.80 0.032 14)",
+          "oklch(0.885 0.024 14)",
+          "oklch(0.955 0.022 14)",
+          "oklch(1 0 0)"
+        ]
+      },
+      "amber": {
+        "role": "warning",
+        "displayName": "Amber (below the line)",
+        "canonical": "oklch(0.52 0.12 58)",
+        "tonalRamp": [
+          "oklch(0.32 0.08 58)",
+          "oklch(0.42 0.10 58)",
+          "oklch(0.52 0.12 58)",
+          "oklch(0.62 0.13 60)",
+          "oklch(0.72 0.13 66)",
+          "oklch(0.82 0.12 72)",
+          "oklch(0.90 0.08 74)",
+          "oklch(0.96 0.04 76)"
+        ]
+      },
+      "blue": {
+        "role": "info",
+        "displayName": "Blue (booked exam)",
+        "canonical": "oklch(0.5 0.12 250)",
+        "tonalRamp": [
+          "oklch(0.32 0.08 250)",
+          "oklch(0.42 0.10 250)",
+          "oklch(0.50 0.12 250)",
+          "oklch(0.60 0.11 248)",
+          "oklch(0.72 0.10 240)",
+          "oklch(0.82 0.07 238)",
+          "oklch(0.90 0.05 236)",
+          "oklch(0.96 0.03 236)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Warm Ink",
+        "canonical": "oklch(0.3 0.028 14)",
+        "tonalRamp": [
+          "oklch(0.20 0.02 14)",
+          "oklch(0.30 0.028 14)",
+          "oklch(0.40 0.03 14)",
+          "oklch(0.46 0.03 14)",
+          "oklch(0.50 0.03 14)",
+          "oklch(0.65 0.02 14)",
+          "oklch(0.80 0.012 14)",
+          "oklch(0.90 0.008 14)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "The focused certification name only." },
+      "headline": { "displayName": "Headline", "purpose": "Section headers (Topics to study)." },
+      "title": { "displayName": "Title", "purpose": "Card titles, topic and material names." },
+      "body": { "displayName": "Body", "purpose": "Notes and prose; measure capped 65–75ch." },
+      "label": { "displayName": "Label", "purpose": "Metadata, dates, pills; tabular figures." }
+    },
+    "shadows": [
+      { "name": "hover", "value": "0 1px 2px oklch(0.4 0.05 14 / 0.08), 0 10px 28px oklch(0.4 0.05 14 / 0.12)", "purpose": "Lift on interactive cards (switch-focus tiles) at hover." },
+      { "name": "pop", "value": "0 2px 8px oklch(0.4 0.05 14 / 0.12), 0 18px 44px oklch(0.4 0.05 14 / 0.16)", "purpose": "Transient surfaces — the mobile navigation drawer." }
+    ],
+    "motion": [
+      { "name": "ease-out", "value": "cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "Default easing for state transitions and bar fills." },
+      { "name": "dur-fast", "value": "130ms", "purpose": "Hover / press feedback." },
+      { "name": "dur", "value": "200ms", "purpose": "Theme, drawer, and focus transitions." },
+      { "name": "dur-slow", "value": "320ms", "purpose": "Progress / mastery bar fill on mount." }
+    ],
+    "breakpoints": [
+      { "name": "compact", "value": "560px" },
+      { "name": "hero-stack", "value": "760px" },
+      { "name": "drawer", "value": "860px" },
+      { "name": "single-column", "value": "1040px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single primary action per screen (Start practice test). Rose fill, white label.",
+      "html": "<button class=\"ds-btn-primary\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M7 5.5v13a1 1 0 0 0 1.5.87l11-6.5a1 1 0 0 0 0-1.74l-11-6.5A1 1 0 0 0 7 5.5Z\"/></svg>Start practice test</button>",
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;gap:.5rem;padding:.625rem 1rem;border:none;border-radius:10px;background:var(--accent);color:var(--on-accent);font:600 .9375rem/1 Figtree,ui-sans-serif,system-ui,sans-serif;cursor:pointer;transition:background .13s cubic-bezier(0.22,1,0.36,1),transform .13s cubic-bezier(0.22,1,0.36,1)}.ds-btn-primary:hover{background:var(--accent-hover);transform:translateY(-1px)}.ds-btn-primary:active{background:var(--accent-press);transform:none}.ds-btn-primary:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Secondary action (Open course). Transparent on white, bordered, muted label.",
+      "html": "<button class=\"ds-btn-ghost\">Open course</button>",
+      "css": ".ds-btn-ghost{display:inline-flex;align-items:center;gap:.5rem;padding:.625rem 1rem;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--ink-muted);font:550 .9375rem/1 Figtree,ui-sans-serif,system-ui,sans-serif;cursor:pointer;transition:background .13s,border-color .13s,color .13s}.ds-btn-ghost:hover{background:var(--surface-hover);border-color:var(--border-strong);color:var(--ink)}.ds-btn-ghost:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}"
+    },
+    {
+      "name": "Status Pill — Passed",
+      "kind": "chip",
+      "refersTo": "status-pill",
+      "description": "Certification status. Tinted-soft background + saturated text of the same hue + icon. Passed uses rose.",
+      "html": "<span class=\"ds-pill ds-pill-passed\"><svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M8 12.2 11 15.2 16.2 9.4\"/></svg>Passed</span>",
+      "css": ".ds-pill{display:inline-flex;align-items:center;gap:.375rem;padding:.25rem .625rem .25rem .5rem;border-radius:999px;font:550 .8125rem/1 Figtree,ui-sans-serif,system-ui,sans-serif;white-space:nowrap}.ds-pill-passed{color:var(--accent);background:var(--accent-soft)}"
+    },
+    {
+      "name": "Status Pill — Studying",
+      "kind": "chip",
+      "refersTo": "status-pill",
+      "description": "In-progress status. Amber — active, distinct from the rose success color.",
+      "html": "<span class=\"ds-pill ds-pill-studying\"><svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><circle cx=\"12\" cy=\"12\" r=\"3\" fill=\"currentColor\" stroke=\"none\"/></svg>Studying</span>",
+      "css": ".ds-pill{display:inline-flex;align-items:center;gap:.375rem;padding:.25rem .625rem .25rem .5rem;border-radius:999px;font:550 .8125rem/1 Figtree,ui-sans-serif,system-ui,sans-serif;white-space:nowrap}.ds-pill-studying{color:var(--warn);background:var(--warn-soft)}"
+    },
+    {
+      "name": "Mastery Bar",
+      "kind": "custom",
+      "refersTo": "mastery-bar",
+      "description": "Topic mastery / progress. Rose fill = at/above passing, amber = below, gray = mid. Optional passing-line tick.",
+      "html": "<div class=\"ds-bar\"><span class=\"ds-bar-fill\"></span><span class=\"ds-bar-tick\"></span></div>",
+      "css": ".ds-bar{position:relative;width:220px;height:8px;background:var(--track);border-radius:999px;overflow:hidden}.ds-bar-fill{display:block;height:100%;width:58%;border-radius:999px;background:var(--warn)}.ds-bar-tick{position:absolute;top:-2px;bottom:-2px;left:70%;width:2px;transform:translateX(-1px);background:var(--ink-faint);opacity:.7;border-radius:999px}"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "White content card lifting off the rose page. Flat at rest; 1px border.",
+      "html": "<div class=\"ds-card\"><h3 class=\"ds-card-title\">Practice tests</h3><p class=\"ds-card-body\">Best 74% · 3 attempts</p></div>",
+      "css": ".ds-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;font-family:Figtree,ui-sans-serif,system-ui,sans-serif}.ds-card-title{margin:0 0 .25rem;font-weight:640;font-size:1.25rem;letter-spacing:-.01em;color:var(--ink)}.ds-card-body{margin:0;font-size:.8125rem;color:var(--ink-muted)}"
+    },
+    {
+      "name": "Nav Item — Active",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Sidebar navigation item, active state: rose text on a rose-soft chip with a rose rail marker.",
+      "html": "<a class=\"ds-nav\" href=\"#\"><svg width=\"19\" height=\"19\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 13h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1Z\"/><path d=\"M14 21h6a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1Z\"/><path d=\"M14 8h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1Z\"/><path d=\"M4 21h6a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1Z\"/></svg><span>Dashboard</span></a>",
+      "css": ".ds-nav{position:relative;display:inline-flex;align-items:center;gap:.75rem;padding:.5625rem .75rem;border-radius:10px;color:var(--accent);background:var(--accent-soft);font:600 .9375rem/1 Figtree,ui-sans-serif,system-ui,sans-serif;text-decoration:none}.ds-nav::before{content:'';position:absolute;left:-.75rem;top:50%;transform:translateY(-50%);width:3px;height:1.35rem;border-radius:999px;background:var(--accent)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Warm Ledger",
+    "overview": "A soft, warmly-lit ledger of your progress. The page is a faint rose-tinted off-white; content lives on crisp white cards that lift cleanly off it. One deep-rose accent carries everything that means forward motion — progress fills, scores, the primary action. Restrained in the Linear tradition, but warm rather than clinical. Light-first, with a rose-accented warm-charcoal dark theme as a genuine peer; both meet WCAG AA. It rejects the corporate-LMS look and cheesy gamification: progress is shown honestly, never performed.",
+    "keyCharacteristics": [
+      "Faint rose page + white cards; a single deep-rose accent for progress & action.",
+      "Disciplined semantics: rose = progress/success, amber = below the line, blue = booked exam, gray = queued/mid.",
+      "Light-first, with a rose-accented warm-charcoal dark theme. Both WCAG AA.",
+      "Single humanist sans (Figtree), weight for hierarchy, tabular figures.",
+      "Responsive motion (130–320ms), never choreographed."
+    ],
+    "rules": [
+      { "name": "The One Warm Signal Rule", "body": "Rose means progress and forward motion — and only that. If something rose isn't about progress or the primary action, it's wrong.", "section": "colors" },
+      { "name": "The Amber-Not-Rose Rule", "body": "\"Needs work\" is always amber, never rose. Since rose reads as success here, a weak area in rose would invert the meaning.", "section": "colors" },
+      { "name": "The White-Card Rule", "body": "Content sits on white cards, not on the rose page. The page tint is atmosphere; legible content lives on white.", "section": "colors" },
+      { "name": "The One Family Rule", "body": "Figtree carries the whole interface. Hierarchy comes from weight, size, and space — never from pairing a second similar sans.", "section": "typography" },
+      { "name": "The Tonal-Depth Rule", "body": "Layering is done with tone (white card on rose page), not with heavy shadows. Any shadow that appears is a response to state.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do reserve rose for progress, success, and the single primary action.",
+      "Do flag \"needs work\" in amber, never rose.",
+      "Do keep content on white cards; let the rose page stay atmosphere.",
+      "Do hold both light and dark themes to WCAG AA.",
+      "Do pair every status with an icon + label; cap body measure at 65–75ch; give every interactive element a visible focus ring.",
+      "Do provide a prefers-reduced-motion alternative for every transition."
+    ],
+    "donts": [
+      "Don't make it look like a corporate LMS / compliance dashboard.",
+      "Don't use cheesy gamification — no confetti, mascots, XP theatrics, or badge walls.",
+      "Don't tint content cards pink — rose belongs to the page and the accent.",
+      "Don't pair two similar sans-serifs; one humanist family, varied by weight.",
+      "Don't add tiny all-caps tracked eyebrows, or use color as the only signal for status.",
+      "Don't spread the rose onto non-progress decoration."
+    ]
+  }
+}
