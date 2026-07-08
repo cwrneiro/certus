@@ -3,6 +3,7 @@ import type { Certification, CertStatus, NewCertInput } from '../data/types'
 import { PageHeader } from '../components/PageHeader'
 import { Segmented } from '../components/Segmented'
 import { CertCard } from '../components/CertCard'
+import { CertDetail } from '../components/CertDetail'
 import { AddCertForm } from '../components/AddCertForm'
 import { PlusIcon, ChevronRightIcon, CertIcon } from '../lib/icons'
 import { weightedMastery } from '../lib/metrics'
@@ -10,7 +11,7 @@ import { daysUntil } from '../lib/format'
 import styles from './CertificationsPage.module.css'
 
 type Filter = 'all' | CertStatus
-type Sort = 'exam' | 'readiness' | 'name'
+type Sort = 'earned' | 'exam' | 'readiness' | 'name'
 
 const STATUS_ORDER: Record<CertStatus, number> = {
   'in-progress': 0,
@@ -28,15 +29,14 @@ const STATUS_LABEL: Record<CertStatus, string> = {
 
 export function CertificationsPage({
   certs,
-  onOpen,
   onAdd,
 }: {
   certs: Certification[]
-  onOpen: (id: string) => void
   onAdd: (input: NewCertInput) => Promise<void>
 }) {
   const [filter, setFilter] = useState<Filter>('all')
-  const [sort, setSort] = useState<Sort>('exam')
+  const [sort, setSort] = useState<Sort>('earned')
+  const [detailId, setDetailId] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -142,6 +142,7 @@ export function CertificationsPage({
               onChange={(e) => setSort(e.target.value as Sort)}
               aria-label="Sort certifications"
             >
+              <option value="earned">Earned first</option>
               <option value="exam">Exam date</option>
               <option value="readiness">Readiness</option>
               <option value="name">Name</option>
@@ -155,7 +156,7 @@ export function CertificationsPage({
         <ul className={styles.grid}>
           {visible.map((cert, i) => (
             <li key={cert.id}>
-              <CertCard cert={cert} onOpen={onOpen} index={i} />
+              <CertCard cert={cert} onOpen={setDetailId} index={i} />
             </li>
           ))}
         </ul>
@@ -175,6 +176,11 @@ export function CertificationsPage({
           </p>
         </div>
       )}
+
+      <CertDetail
+        cert={detailId ? (certs.find((c) => c.id === detailId) ?? null) : null}
+        onClose={() => setDetailId(null)}
+      />
     </div>
   )
 }
@@ -183,6 +189,17 @@ function compare(a: Certification, b: Certification, sort: Sort): number {
   if (sort === 'name') return a.name.localeCompare(b.name)
   if (sort === 'readiness') {
     return weightedMastery(b) - weightedMastery(a)
+  }
+  if (sort === 'earned') {
+    // Accomplishments lead: passed first (most recently earned), then the rest
+    // by the same timeline logic as the exam sort.
+    const ap = a.status === 'passed' ? 0 : 1
+    const bp = b.status === 'passed' ? 0 : 1
+    if (ap !== bp) return ap - bp
+    if (a.status === 'passed' && b.status === 'passed') {
+      return (b.examDate ?? '').localeCompare(a.examDate ?? '')
+    }
+    return compare(a, b, 'exam')
   }
   // exam: soonest upcoming exam first, then undated by status, passed last
   const ax = examRank(a)

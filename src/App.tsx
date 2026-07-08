@@ -69,9 +69,7 @@ export default function App() {
 
     switch (route) {
       case 'certifications':
-        return (
-          <CertificationsPage certs={certs} onOpen={openCert} onAdd={addCert} />
-        )
+        return <CertificationsPage certs={certs} onAdd={addCert} />
       case 'materials':
         return <MaterialsPage certs={certs} />
       case 'schedule':

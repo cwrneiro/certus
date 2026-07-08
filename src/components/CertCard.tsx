@@ -33,7 +33,7 @@ export function CertCard({
         type="button"
         className={styles.openBtn}
         onClick={() => onOpen(cert.id)}
-        aria-label={`Open ${cert.provider} ${cert.name} in the dashboard`}
+        aria-label={`View details for ${cert.provider} ${cert.name}`}
       />
       <div className={styles.head}>
         <StatusPill status={cert.status} size="sm" />
