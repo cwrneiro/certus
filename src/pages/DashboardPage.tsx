@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { Certification } from '../data/types'
+import type { Certification, CertPatch } from '../data/types'
 import { FocusCert } from '../components/FocusCert'
 import { TopicsToStudy } from '../components/TopicsToStudy'
 import { PracticeTests } from '../components/PracticeTests'
@@ -20,10 +20,12 @@ export function DashboardPage({
   certs,
   focusId,
   onFocus,
+  onUpdate,
 }: {
   certs: Certification[]
   focusId: string
   onFocus: (id: string) => void
+  onUpdate: (id: string, patch: CertPatch) => Promise<Certification>
 }) {
   // The dashboard is the study workspace — it only ever shows certs you're
   // still working toward. Earned ones live on the Certifications page.
@@ -87,10 +89,10 @@ export function DashboardPage({
           <FocusCert cert={focusCert} all={studying} onSelect={onFocus} />
 
           <div className={styles.columns}>
-            <TopicsToStudy cert={focusCert} />
+            <TopicsToStudy cert={focusCert} onUpdate={onUpdate} />
             <aside className={styles.rail}>
-              <PracticeTests cert={focusCert} />
-              <StudyMaterials cert={focusCert} />
+              <PracticeTests cert={focusCert} onUpdate={onUpdate} />
+              <StudyMaterials cert={focusCert} onUpdate={onUpdate} />
             </aside>
           </div>
 

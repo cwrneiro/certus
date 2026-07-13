@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import type { Certification } from '../data/types'
+import { useEffect, useRef, useState } from 'react'
+import type { Certification, CertPatch } from '../data/types'
 import { StatusPill } from './StatusPill'
 import { MasteryBar } from './MasteryBar'
 import {
@@ -24,6 +24,7 @@ import {
 } from '../lib/metrics'
 import { countdownMagnitude, formatFullDate, formatDate } from '../lib/format'
 import styles from './CertDetail.module.css'
+import edit from './InlineEdit.module.css'
 
 const MATERIAL_ICON: Record<MaterialType, typeof FileIcon> = {
   course: BookIcon,
@@ -41,9 +42,11 @@ const MATERIAL_ICON: Record<MaterialType, typeof FileIcon> = {
 export function CertDetail({
   cert,
   onClose,
+  onUpdate,
 }: {
   cert: Certification | null
   onClose: () => void
+  onUpdate: (id: string, patch: CertPatch) => Promise<Certification>
 }) {
   const dialogRef = useRef<HTMLDivElement>(null)
 
@@ -277,8 +280,139 @@ export function CertDetail({
               <ExternalIcon size={15} />
             </a>
           )}
+
+          {!isPassed && (
+            <MarkPassed key={cert.id} cert={cert} onUpdate={onUpdate} />
+          )}
         </div>
       </div>
     </div>
+  )
+}
+
+function MarkPassed({
+  cert,
+  onUpdate,
+}: {
+  cert: Certification
+  onUpdate: (id: string, patch: CertPatch) => Promise<Certification>
+}) {
+  const [open, setOpen] = useState(false)
+  const [earnedDate, setEarnedDate] = useState(
+    () => cert.examDate ?? new Date().toISOString().slice(0, 10),
+  )
+  const [score, setScore] = useState('')
+  const [credentialUrl, setCredentialUrl] = useState(cert.credentialUrl ?? '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  if (!open) {
+    return (
+      <button type="button" className={edit.trigger} onClick={() => setOpen(true)}>
+        <CheckCircleIcon size={16} />
+        Passed the exam? Mark it done
+      </button>
+    )
+  }
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault()
+    if (!earnedDate) {
+      setError('Add the date you earned it.')
+      return
+    }
+    const s = score.trim() ? Number(score) : undefined
+    if (s !== undefined && (!Number.isFinite(s) || s < 0 || s > 100)) {
+      setError('Score must be between 0 and 100 — or leave it blank.')
+      return
+    }
+    setSaving(true)
+    setError(null)
+    try {
+      await onUpdate(cert.id, {
+        status: 'passed',
+        examDate: earnedDate,
+        ...(s !== undefined ? { achievedScore: Math.round(s) } : {}),
+        ...(credentialUrl.trim() ? { credentialUrl: credentialUrl.trim() } : {}),
+      })
+      // The updated cert re-renders the dialog in its passed state.
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not mark as passed.')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form className={edit.form} onSubmit={save} noValidate>
+      <p className={edit.formTitle}>Mark as passed</p>
+
+      <div className={edit.fieldRow}>
+        <div className={edit.field}>
+          <label className={edit.label} htmlFor="passed-date">
+            Earned on
+          </label>
+          <input
+            id="passed-date"
+            type="date"
+            className={edit.input}
+            value={earnedDate}
+            onChange={(e) => setEarnedDate(e.target.value)}
+          />
+        </div>
+        <div className={edit.field} style={{ flex: 'none' }}>
+          <label className={edit.label} htmlFor="passed-score">
+            Score (optional)
+          </label>
+          <span className={edit.numWrap}>
+            <input
+              id="passed-score"
+              className={`${edit.input} tnum`}
+              value={score}
+              onChange={(e) => setScore(e.target.value)}
+              inputMode="numeric"
+              placeholder="—"
+            />
+            <span className={edit.numPct} aria-hidden="true">
+              %
+            </span>
+          </span>
+        </div>
+      </div>
+
+      <div className={edit.field}>
+        <label className={edit.label} htmlFor="passed-credential">
+          Credential link (optional)
+        </label>
+        <input
+          id="passed-credential"
+          className={edit.input}
+          value={credentialUrl}
+          onChange={(e) => setCredentialUrl(e.target.value)}
+          placeholder="https://credentials…"
+          inputMode="url"
+        />
+      </div>
+
+      {error && (
+        <p className={edit.error} role="alert">
+          {error}
+        </p>
+      )}
+
+      <div className={edit.actions}>
+        <button
+          type="button"
+          className={edit.ghost}
+          onClick={() => setOpen(false)}
+          disabled={saving}
+        >
+          Cancel
+        </button>
+        <button type="submit" className={edit.primary} disabled={saving}>
+          <CheckCircleIcon size={15} />
+          {saving ? 'Saving…' : 'Mark passed'}
+        </button>
+      </div>
+    </form>
   )
 }

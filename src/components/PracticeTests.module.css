@@ -133,3 +133,14 @@
   line-height: var(--leading-snug);
   max-width: 30ch;
 }
+
+/* Topic label inside the log-attempt form's per-domain rows. */
+.domainLabel {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-sm);
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

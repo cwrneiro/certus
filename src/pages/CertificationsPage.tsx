@@ -1,5 +1,10 @@
 import { useMemo, useState } from 'react'
-import type { Certification, CertStatus, NewCertInput } from '../data/types'
+import type {
+  Certification,
+  CertPatch,
+  CertStatus,
+  NewCertInput,
+} from '../data/types'
 import { PageHeader } from '../components/PageHeader'
 import { Segmented } from '../components/Segmented'
 import { CertCard } from '../components/CertCard'
@@ -30,9 +35,11 @@ const STATUS_LABEL: Record<CertStatus, string> = {
 export function CertificationsPage({
   certs,
   onAdd,
+  onUpdate,
 }: {
   certs: Certification[]
   onAdd: (input: NewCertInput) => Promise<void>
+  onUpdate: (id: string, patch: CertPatch) => Promise<Certification>
 }) {
   const [filter, setFilter] = useState<Filter>('all')
   const [sort, setSort] = useState<Sort>('earned')
@@ -180,6 +187,7 @@ export function CertificationsPage({
       <CertDetail
         cert={detailId ? (certs.find((c) => c.id === detailId) ?? null) : null}
         onClose={() => setDetailId(null)}
+        onUpdate={onUpdate}
       />
     </div>
   )

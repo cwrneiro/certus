@@ -49,6 +49,26 @@ export interface Certification {
   credentialUrl?: string
 }
 
+/** Array items in a patch may omit `id` — the server generates one. */
+type WithOptionalId<T extends { id: string }> = Omit<T, 'id'> & { id?: string }
+
+/** Partial update sent to PATCH /api/certifications/{id}. */
+export type CertPatch = Partial<
+  Pick<
+    Certification,
+    | 'status'
+    | 'examDate'
+    | 'passingScore'
+    | 'achievedScore'
+    | 'credentialUrl'
+    | 'focusMinutesThisWeek'
+  >
+> & {
+  domains?: WithOptionalId<Domain>[]
+  attempts?: WithOptionalId<PracticeAttempt>[]
+  materials?: WithOptionalId<Material>[]
+}
+
 /** Fields captured by the inline "Add certification" form. */
 export interface NewCertInput {
   provider: string

@@ -193,6 +193,97 @@ class NewCert(BaseModel):
     credentialUrl: str | None = None
 
 
+class CertPatch(BaseModel):
+    """Partial update. Only fields the client actually sent are applied
+    (model_dump(exclude_unset=True)), so explicit nulls clear a value."""
+
+    status: str | None = None
+    examDate: str | None = None
+    passingScore: int | None = None
+    achievedScore: int | None = None
+    credentialUrl: str | None = None
+    focusMinutesThisWeek: int | None = None
+    domains: list[dict] | None = None
+    attempts: list[dict] | None = None
+    materials: list[dict] | None = None
+
+
+MATERIAL_TYPES = {"course", "doc", "video", "note", "practice"}
+
+
+def _validated_domains(items: list[dict]) -> list[dict]:
+    out = []
+    for d in items:
+        name = str(d.get("name", "")).strip()
+        if not name:
+            raise HTTPException(400, "Every domain needs a name.")
+        try:
+            weight = float(d.get("weight", 0))
+            mastery = float(d.get("mastery", 0))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "Domain weight and mastery must be numbers.")
+        if not 0 <= weight <= 1:
+            raise HTTPException(400, "Domain weight must be between 0 and 1.")
+        if not 0 <= mastery <= 100:
+            raise HTTPException(400, "Domain mastery must be between 0 and 100.")
+        out.append(
+            {
+                "id": str(d.get("id") or f"d-{uuid.uuid4().hex[:8]}"),
+                "name": name,
+                "weight": weight,
+                "mastery": round(mastery),
+            }
+        )
+    return out
+
+
+def _validated_attempts(items: list[dict]) -> list[dict]:
+    out = []
+    for a in items:
+        try:
+            score = float(a.get("score", -1))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "Attempt score must be a number.")
+        if not 0 <= score <= 100:
+            raise HTTPException(400, "Attempt score must be between 0 and 100.")
+        date = str(a.get("date", "")).strip()
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+            raise HTTPException(400, "Attempt date must be yyyy-mm-dd.")
+        out.append(
+            {
+                "id": str(a.get("id") or f"a-{uuid.uuid4().hex[:8]}"),
+                "provider": str(a.get("provider", "")).strip() or "Practice test",
+                "date": date,
+                "score": round(score),
+                "url": str(a.get("url", "")).strip(),
+            }
+        )
+    return out
+
+
+def _validated_materials(items: list[dict]) -> list[dict]:
+    out = []
+    for m in items:
+        title = str(m.get("title", "")).strip()
+        if not title:
+            raise HTTPException(400, "Every material needs a title.")
+        mtype = m.get("type")
+        if mtype not in MATERIAL_TYPES:
+            raise HTTPException(400, "Invalid material type.")
+        entry = {
+            "id": str(m.get("id") or f"m-{uuid.uuid4().hex[:8]}"),
+            "title": title,
+            "source": str(m.get("source", "")).strip(),
+            "type": mtype,
+            "url": str(m.get("url", "")).strip() or "#",
+        }
+        domain_ids = m.get("domainIds")
+        if isinstance(domain_ids, list) and domain_ids:
+            entry["domainIds"] = [str(x) for x in domain_ids]
+        out.append(entry)
+    return out
+
+
 @app.get("/api/certifications")
 def list_certifications():
     with get_conn() as conn:
@@ -240,6 +331,82 @@ def add_certification(body: NewCert):
             conn.execute(f"SELECT * FROM {SCHEMA}.certifications WHERE id = %s", (cert_id,))
         )
     return _row_to_cert(row)
+
+
+@app.patch("/api/certifications/{cert_id}")
+def update_certification(cert_id: str, body: CertPatch):
+    patch = body.model_dump(exclude_unset=True)
+
+    with get_conn() as conn:
+        row = conn.execute(
+            f"SELECT * FROM {SCHEMA}.certifications WHERE id = %s", (cert_id,)
+        ).fetchone()
+        if row is None:
+            raise HTTPException(404, "Certification not found.")
+        cur = cast("dict[str, Any]", row)
+
+        status = patch.get("status", cur["status"])
+        if status not in VALID_STATUSES:
+            raise HTTPException(400, "Invalid status.")
+
+        passing = patch.get("passingScore", cur["passing_score"])
+        if not 1 <= passing <= 100:
+            raise HTTPException(400, "Passing score must be between 1 and 100.")
+
+        exam_date = patch.get("examDate", cur["exam_date"]) or None
+        if status == "scheduled" and not exam_date:
+            raise HTTPException(400, "An exam date is required when the exam is booked.")
+
+        achieved = patch.get("achievedScore", cur["achieved_score"])
+        if achieved is not None and not 0 <= achieved <= 100:
+            raise HTTPException(400, "Achieved score must be between 0 and 100.")
+        if status != "passed":
+            achieved = None  # only earned certs carry an achieved score
+
+        focus = patch.get("focusMinutesThisWeek", cur["focus_minutes_this_week"])
+        if focus is not None and focus < 0:
+            raise HTTPException(400, "Focus minutes cannot be negative.")
+
+        domains = (
+            _validated_domains(patch["domains"])
+            if patch.get("domains") is not None
+            else cur["domains"]
+        )
+        attempts = (
+            _validated_attempts(patch["attempts"])
+            if patch.get("attempts") is not None
+            else cur["attempts"]
+        )
+        materials = (
+            _validated_materials(patch["materials"])
+            if patch.get("materials") is not None
+            else cur["materials"]
+        )
+
+        conn.execute(
+            f"""UPDATE {SCHEMA}.certifications
+                SET status = %s, exam_date = %s, passing_score = %s,
+                    achieved_score = %s, focus_minutes_this_week = %s,
+                    domains = %s, attempts = %s, materials = %s,
+                    credential_url = %s
+                WHERE id = %s""",
+            (
+                status,
+                exam_date,
+                passing,
+                achieved,
+                focus,
+                Json(domains),
+                Json(attempts),
+                Json(materials),
+                patch.get("credentialUrl", cur["credential_url"]) or None,
+                cert_id,
+            ),
+        )
+        updated = _one(
+            conn.execute(f"SELECT * FROM {SCHEMA}.certifications WHERE id = %s", (cert_id,))
+        )
+    return _row_to_cert(updated)
 
 
 @app.delete("/api/certifications/{cert_id}", status_code=204)

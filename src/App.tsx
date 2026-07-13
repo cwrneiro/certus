@@ -8,9 +8,13 @@ import { EmptyState } from './components/EmptyState'
 import { LoadState } from './components/LoadState'
 import { MenuIcon } from './lib/icons'
 import { useHashRoute } from './lib/useHashRoute'
-import { fetchCertifications, createCertification } from './lib/api'
+import {
+  fetchCertifications,
+  createCertification,
+  updateCertification,
+} from './lib/api'
 import { daysUntil } from './lib/format'
-import type { Certification, NewCertInput } from './data/types'
+import type { Certification, CertPatch, NewCertInput } from './data/types'
 import styles from './App.module.css'
 
 export default function App() {
@@ -62,6 +66,14 @@ export default function App() {
     setCerts((prev) => (prev ? [created, ...prev] : [created]))
   }
 
+  async function updateCert(id: string, patch: CertPatch): Promise<Certification> {
+    const updated = await updateCertification(id, patch)
+    setCerts((prev) =>
+      prev ? prev.map((c) => (c.id === updated.id ? updated : c)) : prev,
+    )
+    return updated
+  }
+
   function renderContent() {
     if (loadError) return <LoadState variant="error" onRetry={load} />
     if (certs === null) return <LoadState variant="loading" />
@@ -69,14 +81,21 @@ export default function App() {
 
     switch (route) {
       case 'certifications':
-        return <CertificationsPage certs={certs} onAdd={addCert} />
+        return (
+          <CertificationsPage certs={certs} onAdd={addCert} onUpdate={updateCert} />
+        )
       case 'materials':
         return <MaterialsPage certs={certs} />
       case 'schedule':
         return <SchedulePage certs={certs} onOpen={openCert} />
       default:
         return (
-          <DashboardPage certs={certs} focusId={focusId} onFocus={setFocusId} />
+          <DashboardPage
+            certs={certs}
+            focusId={focusId}
+            onFocus={setFocusId}
+            onUpdate={updateCert}
+          />
         )
     }
   }
