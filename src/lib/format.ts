@@ -1,7 +1,7 @@
-/* Date + number formatting helpers. Deterministic relative to a fixed
-   "today" so the seeded demo data always reads consistently. */
+/* Date + number formatting helpers. "Today" is captured once at app load so
+   every countdown and relative date reads consistently within a session. */
 
-export const TODAY = new Date('2026-07-06T09:00:00')
+export const TODAY = new Date()
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24
 
