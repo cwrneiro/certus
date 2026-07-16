@@ -9,11 +9,13 @@ certs the user adds persist across refreshes and restarts.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 from typing import Any, cast
@@ -22,6 +24,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Json
 from databricks.sdk import WorkspaceClient
+from databricks.sdk.config import Config
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -36,9 +39,13 @@ VALID_STATUSES = {"queued", "in-progress", "scheduled", "passed"}
 # llm/v1/chat endpoint on the workspace works; this one gives reliable JSON.
 QUIZ_MODEL = "databricks-claude-sonnet-5"
 QUIZ_QUESTION_COUNT = 15
+QUIZ_BATCH_SIZE = 5  # questions per model call — small so each finishes fast
 MAX_GUIDE_CHARS = 40_000  # plenty for an exam guide; keeps the prompt bounded
 
 _w = WorkspaceClient()
+# A separate client for model calls with a generous HTTP timeout — generating a
+# batch can take a couple of minutes, above the SDK's 300s default per request.
+_model_w = WorkspaceClient(config=Config(http_timeout_seconds=600))
 _token_lock = threading.Lock()
 _token_value_cache: str | None = None
 _token_ts: float = 0.0
@@ -351,7 +358,7 @@ QUIZ_SYSTEM_PROMPT = (
 )
 
 
-def _quiz_json_schema() -> dict:
+def _outline_schema() -> dict:
     return {
         "type": "object",
         "properties": {
@@ -369,6 +376,15 @@ def _quiz_json_schema() -> dict:
                     "required": ["name", "weight"],
                 },
             },
+        },
+        "required": ["domains"],
+    }
+
+
+def _questions_schema() -> dict:
+    return {
+        "type": "object",
+        "properties": {
             "questions": {
                 "type": "array",
                 "items": {
@@ -388,46 +404,33 @@ def _quiz_json_schema() -> dict:
                         "explanation": {"type": "string"},
                         "domain": {
                             "type": "string",
-                            "description": "Name of the domain this tests; must match one in domains.",
+                            "description": "Name of the domain this tests; must match one provided.",
                         },
                     },
                     "required": ["prompt", "options", "correctIndex", "explanation", "domain"],
                 },
             },
         },
-        "required": ["domains", "questions"],
+        "required": ["questions"],
     }
 
 
-def _generate_quiz(cert: dict, guide_text: str) -> dict:
-    """Call the Foundation Model and return validated {domains, quizQuestions}."""
-    user_prompt = (
-        f"Certification: {cert['provider']} — {cert['name']}.\n"
-        f"Write {QUIZ_QUESTION_COUNT} multiple-choice practice questions, each "
-        "with 4 options, one correct. Distribute questions across domains "
-        "roughly in proportion to their exam weight. Here is the exam guide:\n\n"
-        f"{guide_text}"
-    )
-    # Call the endpoint's OpenAI-compatible /invocations route through the SDK's
-    # authenticated API client. This works across SDK versions and accepts
-    # response_format for guaranteed-shape JSON.
+def _model_json(user_prompt: str, schema: dict, schema_name: str) -> dict:
+    """Call the endpoint's OpenAI-compatible /invocations route (works across SDK
+    versions and accepts response_format) and return the parsed JSON object."""
     payload = {
         "messages": [
             {"role": "system", "content": QUIZ_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
-        "max_tokens": 8000,
+        "max_tokens": 4000,
         "response_format": {
             "type": "json_schema",
-            "json_schema": {
-                "name": "practice_test",
-                "schema": _quiz_json_schema(),
-                "strict": True,
-            },
+            "json_schema": {"name": schema_name, "schema": schema, "strict": True},
         },
     }
     try:
-        resp = _w.api_client.do(
+        resp = _model_w.api_client.do(
             "POST", f"/serving-endpoints/{QUIZ_MODEL}/invocations", body=payload
         )
     except Exception as exc:  # noqa: BLE001 — surface a clean message to the UI
@@ -438,20 +441,94 @@ def _generate_quiz(cert: dict, guide_text: str) -> dict:
     if not content:
         raise HTTPException(502, "The question generator returned nothing.")
     try:
-        parsed = json.loads(content)
+        return json.loads(content)
     except (json.JSONDecodeError, TypeError):
         raise HTTPException(502, "The question generator returned malformed data.")
 
-    return _assemble_quiz(cert, parsed)
+
+def _extract_list(parsed: dict, key: str) -> list:
+    """Pull a list out of a model response, tolerating the endpoint occasionally
+    double-encoding the value as a JSON string (e.g. {"domains": "{\"domains\":[…]}"})."""
+    val = parsed.get(key)
+    if isinstance(val, str):
+        try:
+            val = json.loads(val)
+        except (json.JSONDecodeError, TypeError):
+            return []
+    if isinstance(val, dict):  # unwrap {"domains": [...]} nested one level
+        val = val.get(key)
+    return val if isinstance(val, list) else []
 
 
-def _assemble_quiz(cert: dict, parsed: dict) -> dict:
-    """Merge generated domains into the cert's existing ones (by name, keeping
-    ids + mastery), then build quiz questions with resolved option/domain ids."""
+def _generate_quiz(cert: dict, guide_text: str) -> dict:
+    """Generate a practice test in two phases, kept small so each model call
+    finishes well under the request timeout: (1) one call for the exam outline
+    (domains + weights); (2) parallel calls for question batches, distributed
+    across domains by weight. Returns validated {domains, quizQuestions}."""
+    label = f"{cert['provider']} — {cert['name']}"
+
+    # Phase 1 — outline.
+    outline = _model_json(
+        f"Certification: {label}.\nExtract the exam outline: the list of domains "
+        "(knowledge areas) and each domain's weight as a share of the exam "
+        f"(0-1, summing to ~1). Here is the exam guide:\n\n{guide_text}",
+        _outline_schema(),
+        "exam_outline",
+    )
+    domains = _merge_domains(cert, _extract_list(outline, "domains"))
+    domain_names = [d["name"] for d in domains]
+    if not domain_names:
+        raise HTTPException(502, "Could not read the exam outline — try again.")
+
+    # Phase 2 — question batches in parallel. Trim the guide for these prompts;
+    # the outline already captured structure, so batches need less context.
+    guide_excerpt = guide_text[:12_000]
+    batch_count = max(1, math.ceil(QUIZ_QUESTION_COUNT / QUIZ_BATCH_SIZE))
+
+    def gen_batch(i: int) -> list[dict]:
+        want = min(
+            QUIZ_BATCH_SIZE, QUIZ_QUESTION_COUNT - i * QUIZ_BATCH_SIZE
+        )
+        prompt = (
+            f"Certification: {label}.\n"
+            f"Write {want} multiple-choice practice questions (each with exactly "
+            "4 options, one correct, plus a short explanation). Tag each with the "
+            "domain it tests, chosen from: "
+            f"{', '.join(domain_names)}.\n"
+            "Distribute across those domains by exam weight. This is batch "
+            f"{i + 1} of {batch_count} — make these questions distinct from a "
+            "typical set (vary the domains and scenarios). Exam guide:\n\n"
+            f"{guide_excerpt}"
+        )
+        out = _model_json(prompt, _questions_schema(), "practice_questions")
+        return _extract_list(out, "questions")
+
+    raw_questions: list[dict] = []
+    errors: list[str] = []
+    with ThreadPoolExecutor(max_workers=batch_count) as pool:
+        futures = {pool.submit(gen_batch, i): i for i in range(batch_count)}
+        for fut in as_completed(futures):
+            try:
+                raw_questions.extend(fut.result())
+            except HTTPException as exc:
+                errors.append(str(exc.detail))
+            except Exception as exc:  # noqa: BLE001
+                errors.append(str(exc))
+
+    questions = _build_questions(domains, raw_questions)
+    if not questions:
+        detail = errors[0] if errors else "No usable questions came back — try again."
+        raise HTTPException(502, detail)
+
+    return {"domains": domains, "quizQuestions": questions}
+
+
+def _merge_domains(cert: dict, generated: list[dict]) -> list[dict]:
+    """Merge generated domains into the cert's existing ones by name, keeping
+    existing ids + mastery and refreshing weight from the guide."""
     existing = list(cert.get("domains") or [])
     by_name = {d["name"].strip().lower(): d for d in existing}
-
-    for gd in parsed.get("domains", []):
+    for gd in generated:
         name = str(gd.get("name", "")).strip()
         if not name:
             continue
@@ -462,7 +539,6 @@ def _assemble_quiz(cert: dict, parsed: dict) -> dict:
             weight = 0.0
         weight = min(max(weight, 0.0), 1.0)
         if key in by_name:
-            # Keep the user's mastery; refresh the weight from the guide.
             by_name[key]["weight"] = weight
         else:
             new_d = {
@@ -473,9 +549,15 @@ def _assemble_quiz(cert: dict, parsed: dict) -> dict:
             }
             by_name[key] = new_d
             existing.append(new_d)
+    return existing
 
+
+def _build_questions(domains: list[dict], raw: list[dict]) -> list[dict]:
+    """Turn raw model questions into stored questions with option ids, a resolved
+    correctOptionId, and a domainId matched by name. Drops malformed entries."""
+    by_name = {d["name"].strip().lower(): d for d in domains}
     questions = []
-    for q in parsed.get("questions", []):
+    for q in raw:
         prompt = str(q.get("prompt", "")).strip()
         opts = q.get("options") or []
         idx = q.get("correctIndex")
@@ -499,11 +581,7 @@ def _assemble_quiz(cert: dict, parsed: dict) -> dict:
                 **({"domainId": domain_id} if domain_id else {}),
             }
         )
-
-    if not questions:
-        raise HTTPException(502, "No usable questions came back — try again.")
-
-    return {"domains": existing, "quizQuestions": questions}
+    return questions
 
 
 @app.get("/api/certifications")
