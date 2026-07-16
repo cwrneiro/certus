@@ -1,23 +1,31 @@
 import { useState } from 'react'
 import type { Certification, CertPatch } from '../data/types'
 import { Sparkline } from './Sparkline'
+import { PracticeQuiz } from './PracticeQuiz'
+import { generateQuiz } from '../lib/api'
 import { sortedAttempts } from '../lib/metrics'
 import { formatDate, formatRelativeAgo } from '../lib/format'
-import { ExternalIcon, TargetIcon, PlusIcon } from '../lib/icons'
+import { ExternalIcon, TargetIcon, PlusIcon, PlayIcon } from '../lib/icons'
 import styles from './PracticeTests.module.css'
 import edit from './InlineEdit.module.css'
 
 export function PracticeTests({
   cert,
   onUpdate,
+  onReplace,
 }: {
   cert: Certification
   onUpdate: (id: string, patch: CertPatch) => Promise<Certification>
+  /** Swap a full cert into app state — used after quiz generation. */
+  onReplace: (cert: Certification) => void
 }) {
   const attempts = sortedAttempts(cert)
   const best = attempts.reduce((m, a) => Math.max(m, a.score), 0)
   const points = attempts.map((a) => ({ score: a.score, label: a.date }))
   const [logging, setLogging] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [quizOpen, setQuizOpen] = useState(false)
+  const hasQuiz = cert.quizQuestions.length > 0
 
   return (
     <section className={styles.card} aria-labelledby="practice-heading">
@@ -34,6 +42,29 @@ export function PracticeTests({
           </span>
         )}
       </header>
+
+      {/* In-app quiz built from the exam guide — the primary way to practice. */}
+      <QuizPanel
+        cert={cert}
+        hasQuiz={hasQuiz}
+        onTake={() => setQuizOpen(true)}
+        generating={generating}
+        onGenerate={() => setGenerating(true)}
+      />
+      {generating && (
+        <GenerateQuizForm
+          cert={cert}
+          onReplace={onReplace}
+          onClose={() => setGenerating(false)}
+        />
+      )}
+      {quizOpen && (
+        <PracticeQuiz
+          cert={cert}
+          onUpdate={onUpdate}
+          onClose={() => setQuizOpen(false)}
+        />
+      )}
 
       {logging && (
         <LogAttemptForm cert={cert} onUpdate={onUpdate} onClose={() => setLogging(false)} />
@@ -93,10 +124,147 @@ export function PracticeTests({
       {!logging && (
         <button type="button" className={edit.trigger} onClick={() => setLogging(true)}>
           <PlusIcon size={16} />
-          Log practice test
+          Log an external practice test
         </button>
       )}
     </section>
+  )
+}
+
+/**
+ * The in-app quiz call-to-action. With a question bank: a primary "Take
+ * practice test" button. Without one: an invitation to build one from the
+ * exam guide. Hidden while the generate form is open.
+ */
+function QuizPanel({
+  cert,
+  hasQuiz,
+  onTake,
+  generating,
+  onGenerate,
+}: {
+  cert: Certification
+  hasQuiz: boolean
+  onTake: () => void
+  generating: boolean
+  onGenerate: () => void
+}) {
+  if (generating) return null
+
+  if (hasQuiz) {
+    const n = cert.quizQuestions.length
+    return (
+      <div className={styles.quizPanel}>
+        <button type="button" className={styles.takeQuiz} onClick={onTake}>
+          <PlayIcon size={17} />
+          Take practice test
+          <span className={styles.takeQuizCount}>
+            <span className="tnum">{n}</span> questions
+          </span>
+        </button>
+        <button type="button" className={styles.regen} onClick={onGenerate}>
+          Rebuild from guide
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <button type="button" className={styles.generateCard} onClick={onGenerate}>
+      <span className={styles.generateIcon} aria-hidden="true">
+        <TargetIcon size={20} />
+      </span>
+      <span className={styles.generateText}>
+        <span className={styles.generateTitle}>Build a practice test</span>
+        <span className={styles.generateBody}>
+          Paste the exam guide — we'll write questions from its outline.
+        </span>
+      </span>
+    </button>
+  )
+}
+
+/** Paste an exam-guide URL; the backend fetches it and generates a quiz. */
+function GenerateQuizForm({
+  cert,
+  onReplace,
+  onClose,
+}: {
+  cert: Certification
+  onReplace: (cert: Certification) => void
+  onClose: () => void
+}) {
+  const [url, setUrl] = useState(cert.examGuideUrl ?? '')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    const guide = url.trim()
+    if (!/^https?:\/\//i.test(guide)) {
+      setError('Paste a link to the exam guide (a PDF works best).')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      const updated = await generateQuiz(cert.id, guide)
+      onReplace(updated)
+      onClose()
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Could not build the practice test.',
+      )
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form className={edit.form} onSubmit={submit} noValidate>
+      <p className={edit.formTitle}>Build a practice test from the exam guide</p>
+
+      <div className={edit.field}>
+        <label className={edit.label} htmlFor="guide-url">
+          Exam guide link
+        </label>
+        <input
+          id="guide-url"
+          className={edit.input}
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://…/exam-guide.pdf"
+          inputMode="url"
+          autoFocus
+          disabled={busy}
+        />
+        <span className={edit.hint}>
+          {busy
+            ? 'Reading the guide and writing questions — this takes a moment…'
+            : 'The outline and any sample questions shape the test. Existing topics keep their mastery.'}
+        </span>
+      </div>
+
+      {error && (
+        <p className={edit.error} role="alert">
+          {error}
+        </p>
+      )}
+
+      <div className={edit.actions}>
+        <button
+          type="button"
+          className={edit.ghost}
+          onClick={onClose}
+          disabled={busy}
+        >
+          Cancel
+        </button>
+        <button type="submit" className={edit.primary} disabled={busy}>
+          <TargetIcon size={15} />
+          {busy ? 'Generating…' : 'Generate test'}
+        </button>
+      </div>
+    </form>
   )
 }
 

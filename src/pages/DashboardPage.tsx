@@ -21,11 +21,13 @@ export function DashboardPage({
   focusId,
   onFocus,
   onUpdate,
+  onReplace,
 }: {
   certs: Certification[]
   focusId: string
   onFocus: (id: string) => void
   onUpdate: (id: string, patch: CertPatch) => Promise<Certification>
+  onReplace: (cert: Certification) => void
 }) {
   // The dashboard is the study workspace — it only ever shows certs you're
   // still working toward. Earned ones live on the Certifications page.
@@ -91,7 +93,11 @@ export function DashboardPage({
           <div className={styles.columns}>
             <TopicsToStudy cert={focusCert} onUpdate={onUpdate} />
             <aside className={styles.rail}>
-              <PracticeTests cert={focusCert} onUpdate={onUpdate} />
+              <PracticeTests
+                cert={focusCert}
+                onUpdate={onUpdate}
+                onReplace={onReplace}
+              />
               <StudyMaterials cert={focusCert} onUpdate={onUpdate} />
             </aside>
           </div>

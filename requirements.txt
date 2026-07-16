@@ -2,3 +2,5 @@ fastapi
 uvicorn
 psycopg[binary]
 databricks-sdk>=0.91.0
+httpx
+pypdf

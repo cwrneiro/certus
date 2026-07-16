@@ -29,6 +29,24 @@ export interface PracticeAttempt {
   url: string
 }
 
+export interface QuizOption {
+  id: string
+  text: string
+}
+
+/** One AI-generated multiple-choice question, drawn from an exam guide. */
+export interface QuizQuestion {
+  id: string
+  prompt: string
+  options: QuizOption[]
+  /** The id of the single correct option. */
+  correctOptionId: string
+  /** Why the correct answer is right — shown on the results screen. */
+  explanation: string
+  /** Which domain this question tests, by domain id (for per-topic scoring). */
+  domainId?: string
+}
+
 export interface Certification {
   id: string
   provider: string
@@ -43,6 +61,10 @@ export interface Certification {
   domains: Domain[]
   attempts: PracticeAttempt[]
   materials: Material[]
+  /** In-app practice questions, AI-generated from the exam guide. */
+  quizQuestions: QuizQuestion[]
+  /** The exam-guide PDF the quiz was generated from, if any. */
+  examGuideUrl?: string
   /** Minutes studied this week (honest activity, not a streak). */
   focusMinutesThisWeek?: number
   /** Public verification URL for an earned credential (badge page). */

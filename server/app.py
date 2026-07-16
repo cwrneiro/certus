@@ -32,6 +32,12 @@ SEED_FILE = Path(__file__).resolve().parent / "seed.json"
 SCHEMA = "certus"
 VALID_STATUSES = {"queued", "in-progress", "scheduled", "passed"}
 
+# Foundation Model used to turn an exam guide into a practice test. Any
+# llm/v1/chat endpoint on the workspace works; this one gives reliable JSON.
+QUIZ_MODEL = "databricks-claude-sonnet-5"
+QUIZ_QUESTION_COUNT = 15
+MAX_GUIDE_CHARS = 40_000  # plenty for an exam guide; keeps the prompt bounded
+
 _w = WorkspaceClient()
 _token_lock = threading.Lock()
 _token_value_cache: str | None = None
@@ -98,12 +104,16 @@ CREATE TABLE IF NOT EXISTS {SCHEMA}.certifications (
     domains                  jsonb NOT NULL DEFAULT '[]'::jsonb,
     attempts                 jsonb NOT NULL DEFAULT '[]'::jsonb,
     materials                jsonb NOT NULL DEFAULT '[]'::jsonb,
+    quiz_questions           jsonb NOT NULL DEFAULT '[]'::jsonb,
+    exam_guide_url           text,
     credential_url           text,
     sort_order               double precision NOT NULL DEFAULT 0,
     created_at               timestamptz NOT NULL DEFAULT now()
 );
--- Additive migration for tables created before credential_url existed.
+-- Additive migrations for tables created before these columns existed.
 ALTER TABLE {SCHEMA}.certifications ADD COLUMN IF NOT EXISTS credential_url text;
+ALTER TABLE {SCHEMA}.certifications ADD COLUMN IF NOT EXISTS quiz_questions jsonb NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE {SCHEMA}.certifications ADD COLUMN IF NOT EXISTS exam_guide_url text;
 """
 
 
@@ -126,6 +136,8 @@ def _row_to_cert(r: dict) -> dict:
         "domains": r["domains"],
         "attempts": r["attempts"],
         "materials": r["materials"],
+        "quizQuestions": r["quiz_questions"],
+        "examGuideUrl": r["exam_guide_url"],
         "credentialUrl": r["credential_url"],
     }
 
@@ -135,8 +147,8 @@ def _insert_cert(conn, c: dict, sort_order: float) -> None:
         f"""INSERT INTO {SCHEMA}.certifications
             (id, provider, name, short_name, status, exam_date, passing_score,
              achieved_score, focus_minutes_this_week, domains, attempts, materials,
-             credential_url, sort_order)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+             quiz_questions, exam_guide_url, credential_url, sort_order)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             ON CONFLICT (id) DO NOTHING""",
         (
             c["id"],
@@ -151,6 +163,8 @@ def _insert_cert(conn, c: dict, sort_order: float) -> None:
             Json(c.get("domains", [])),
             Json(c.get("attempts", [])),
             Json(c.get("materials", [])),
+            Json(c.get("quizQuestions", [])),
+            c.get("examGuideUrl"),
             c.get("credentialUrl"),
             sort_order,
         ),
@@ -284,6 +298,208 @@ def _validated_materials(items: list[dict]) -> list[dict]:
     return out
 
 
+def _fetch_guide_text(url: str) -> str:
+    """Download an exam-guide PDF (or HTML page) and return its plain text."""
+    import httpx
+    from pypdf import PdfReader
+
+    try:
+        resp = httpx.get(url, follow_redirects=True, timeout=30.0)
+        resp.raise_for_status()
+    except httpx.HTTPError:
+        raise HTTPException(400, "Could not download that guide. Check the URL.")
+
+    ctype = resp.headers.get("content-type", "").lower()
+    data = resp.content
+    is_pdf = "pdf" in ctype or url.lower().endswith(".pdf") or data[:5] == b"%PDF-"
+    if is_pdf:
+        from io import BytesIO
+
+        try:
+            reader = PdfReader(BytesIO(data))
+            text = "\n".join(page.extract_text() or "" for page in reader.pages)
+        except Exception:
+            raise HTTPException(400, "That PDF could not be read.")
+    else:
+        # Best-effort text from an HTML page: strip tags.
+        text = re.sub(r"<[^>]+>", " ", resp.text)
+
+    # PDFs often extract one token per line; collapse runs of whitespace
+    # (incl. newlines) to keep the prompt compact and readable.
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) < 200:
+        raise HTTPException(
+            400, "That guide didn't contain enough readable text to use."
+        )
+    return text[:MAX_GUIDE_CHARS]
+
+
+QUIZ_SYSTEM_PROMPT = (
+    "You are an expert certification exam-prep author. Given the text of an "
+    "official certification exam guide, you produce (1) the exam's outline as a "
+    "list of domains with their exam weight, and (2) a set of high-quality "
+    "multiple-choice practice questions that reflect the real exam's style, "
+    "difficulty, and topic distribution. Each question has exactly one correct "
+    "answer and a short explanation. Base questions on the guide's actual "
+    "objectives and any sample questions it contains. Respond with JSON only."
+)
+
+
+def _quiz_json_schema() -> dict:
+    return {
+        "type": "object",
+        "properties": {
+            "domains": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "weight": {
+                            "type": "number",
+                            "description": "Share of the exam, 0-1.",
+                        },
+                    },
+                    "required": ["name", "weight"],
+                },
+            },
+            "questions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "prompt": {"type": "string"},
+                        "options": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "minItems": 4,
+                            "maxItems": 4,
+                        },
+                        "correctIndex": {
+                            "type": "integer",
+                            "description": "0-based index of the correct option.",
+                        },
+                        "explanation": {"type": "string"},
+                        "domain": {
+                            "type": "string",
+                            "description": "Name of the domain this tests; must match one in domains.",
+                        },
+                    },
+                    "required": ["prompt", "options", "correctIndex", "explanation", "domain"],
+                },
+            },
+        },
+        "required": ["domains", "questions"],
+    }
+
+
+def _generate_quiz(cert: dict, guide_text: str) -> dict:
+    """Call the Foundation Model and return validated {domains, quizQuestions}."""
+    user_prompt = (
+        f"Certification: {cert['provider']} — {cert['name']}.\n"
+        f"Write {QUIZ_QUESTION_COUNT} multiple-choice practice questions, each "
+        "with 4 options, one correct. Distribute questions across domains "
+        "roughly in proportion to their exam weight. Here is the exam guide:\n\n"
+        f"{guide_text}"
+    )
+    # Call the endpoint's OpenAI-compatible /invocations route through the SDK's
+    # authenticated API client. This works across SDK versions and accepts
+    # response_format for guaranteed-shape JSON.
+    payload = {
+        "messages": [
+            {"role": "system", "content": QUIZ_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        "max_tokens": 8000,
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "practice_test",
+                "schema": _quiz_json_schema(),
+                "strict": True,
+            },
+        },
+    }
+    try:
+        resp = _w.api_client.do(
+            "POST", f"/serving-endpoints/{QUIZ_MODEL}/invocations", body=payload
+        )
+    except Exception as exc:  # noqa: BLE001 — surface a clean message to the UI
+        raise HTTPException(502, f"The question generator was unavailable: {exc}")
+
+    choices = (resp or {}).get("choices") if isinstance(resp, dict) else None
+    content = choices[0]["message"]["content"] if choices else None
+    if not content:
+        raise HTTPException(502, "The question generator returned nothing.")
+    try:
+        parsed = json.loads(content)
+    except (json.JSONDecodeError, TypeError):
+        raise HTTPException(502, "The question generator returned malformed data.")
+
+    return _assemble_quiz(cert, parsed)
+
+
+def _assemble_quiz(cert: dict, parsed: dict) -> dict:
+    """Merge generated domains into the cert's existing ones (by name, keeping
+    ids + mastery), then build quiz questions with resolved option/domain ids."""
+    existing = list(cert.get("domains") or [])
+    by_name = {d["name"].strip().lower(): d for d in existing}
+
+    for gd in parsed.get("domains", []):
+        name = str(gd.get("name", "")).strip()
+        if not name:
+            continue
+        key = name.lower()
+        try:
+            weight = float(gd.get("weight", 0))
+        except (TypeError, ValueError):
+            weight = 0.0
+        weight = min(max(weight, 0.0), 1.0)
+        if key in by_name:
+            # Keep the user's mastery; refresh the weight from the guide.
+            by_name[key]["weight"] = weight
+        else:
+            new_d = {
+                "id": f"d-{uuid.uuid4().hex[:8]}",
+                "name": name,
+                "weight": weight,
+                "mastery": 0,
+            }
+            by_name[key] = new_d
+            existing.append(new_d)
+
+    questions = []
+    for q in parsed.get("questions", []):
+        prompt = str(q.get("prompt", "")).strip()
+        opts = q.get("options") or []
+        idx = q.get("correctIndex")
+        if not prompt or not isinstance(opts, list) or len(opts) < 2:
+            continue
+        if not isinstance(idx, int) or not 0 <= idx < len(opts):
+            continue
+        options = [
+            {"id": f"o-{uuid.uuid4().hex[:6]}", "text": str(o).strip()}
+            for o in opts
+        ]
+        dname = str(q.get("domain", "")).strip().lower()
+        domain_id = by_name[dname]["id"] if dname in by_name else None
+        questions.append(
+            {
+                "id": f"q-{uuid.uuid4().hex[:8]}",
+                "prompt": prompt,
+                "options": options,
+                "correctOptionId": options[idx]["id"],
+                "explanation": str(q.get("explanation", "")).strip(),
+                **({"domainId": domain_id} if domain_id else {}),
+            }
+        )
+
+    if not questions:
+        raise HTTPException(502, "No usable questions came back — try again.")
+
+    return {"domains": existing, "quizQuestions": questions}
+
+
 @app.get("/api/certifications")
 def list_certifications():
     with get_conn() as conn:
@@ -400,6 +616,45 @@ def update_certification(cert_id: str, body: CertPatch):
                 Json(attempts),
                 Json(materials),
                 patch.get("credentialUrl", cur["credential_url"]) or None,
+                cert_id,
+            ),
+        )
+        updated = _one(
+            conn.execute(f"SELECT * FROM {SCHEMA}.certifications WHERE id = %s", (cert_id,))
+        )
+    return _row_to_cert(updated)
+
+
+class QuizGenerateRequest(BaseModel):
+    guideUrl: str
+
+
+@app.post("/api/certifications/{cert_id}/quiz/generate")
+def generate_quiz(cert_id: str, body: QuizGenerateRequest):
+    guide_url = body.guideUrl.strip()
+    if not re.match(r"^https?://", guide_url, re.IGNORECASE):
+        raise HTTPException(400, "Enter a valid http(s) link to the exam guide.")
+
+    with get_conn() as conn:
+        row = conn.execute(
+            f"SELECT * FROM {SCHEMA}.certifications WHERE id = %s", (cert_id,)
+        ).fetchone()
+        if row is None:
+            raise HTTPException(404, "Certification not found.")
+        cert = _row_to_cert(cast("dict[str, Any]", row))
+
+    guide_text = _fetch_guide_text(guide_url)
+    result = _generate_quiz(cert, guide_text)
+
+    with get_conn() as conn:
+        conn.execute(
+            f"""UPDATE {SCHEMA}.certifications
+                SET domains = %s, quiz_questions = %s, exam_guide_url = %s
+                WHERE id = %s""",
+            (
+                Json(result["domains"]),
+                Json(result["quizQuestions"]),
+                guide_url,
                 cert_id,
             ),
         )

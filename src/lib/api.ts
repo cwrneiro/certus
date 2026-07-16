@@ -43,3 +43,27 @@ export async function updateCertification(
   if (!res.ok) throw await errorFrom(res, 'Could not save changes.')
   return res.json()
 }
+
+/**
+ * Generate an in-app practice test from an exam-guide PDF. The backend fetches
+ * the guide, extracts the outline + sample questions, and asks a Foundation
+ * Model to write a multiple-choice set — persisting the questions (and any
+ * newly discovered domains) onto the cert. Slow (a model call), so callers
+ * should show a working state.
+ */
+export async function generateQuiz(
+  id: string,
+  guideUrl: string,
+): Promise<Certification> {
+  const res = await fetch(
+    `/api/certifications/${encodeURIComponent(id)}/quiz/generate`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ guideUrl }),
+    },
+  )
+  if (!res.ok)
+    throw await errorFrom(res, 'Could not build a practice test from that guide.')
+  return res.json()
+}

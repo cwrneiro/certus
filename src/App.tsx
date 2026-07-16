@@ -68,10 +68,15 @@ export default function App() {
 
   async function updateCert(id: string, patch: CertPatch): Promise<Certification> {
     const updated = await updateCertification(id, patch)
+    replaceCert(updated)
+    return updated
+  }
+
+  // Swap a full cert into state (e.g. after server-side quiz generation).
+  function replaceCert(updated: Certification) {
     setCerts((prev) =>
       prev ? prev.map((c) => (c.id === updated.id ? updated : c)) : prev,
     )
-    return updated
   }
 
   function renderContent() {
@@ -95,6 +100,7 @@ export default function App() {
             focusId={focusId}
             onFocus={setFocusId}
             onUpdate={updateCert}
+            onReplace={replaceCert}
           />
         )
     }

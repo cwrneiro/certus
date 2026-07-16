@@ -17,6 +17,7 @@ one place.
 | Routing | Dependency-free hash router (`src/lib/useHashRoute.ts`) |
 | Backend | FastAPI (Python) — `server/app.py` |
 | Database | Lakebase (Databricks serverless Postgres, Autoscaling) |
+| AI | Databricks Foundation Model API (practice-test generation) |
 | Hosting | Databricks Apps |
 
 The frontend is a static SPA. In production the FastAPI backend serves the built
@@ -64,7 +65,8 @@ One table, `certus.certifications`, with the nested arrays stored as JSONB (they
 |--------|-------|
 | `id` (PK), `provider`, `name`, `short_name`, `status` | `status` ∈ `queued` · `in-progress` · `scheduled` · `passed` |
 | `exam_date`, `passing_score`, `achieved_score` | achieved score only for `passed` |
-| `domains`, `attempts`, `materials` | `jsonb` |
+| `domains`, `attempts`, `materials`, `quiz_questions` | `jsonb` |
+| `exam_guide_url` | source guide the practice test was generated from |
 | `credential_url` | public badge/verification link |
 | `sort_order`, `created_at` | ordering |
 
@@ -74,7 +76,24 @@ One table, `certus.certifications`, with the nested arrays stored as JSONB (they
 |--------|-------|---------|
 | `GET` | `/api/certifications` | list all (ordered) |
 | `POST` | `/api/certifications` | add one (validated) |
+| `PATCH` | `/api/certifications/{id}` | partial update (status, scores, domains, attempts, materials) |
+| `POST` | `/api/certifications/{id}/quiz/generate` | build an in-app practice test from an exam-guide URL |
 | `DELETE` | `/api/certifications/{id}` | remove one |
+
+### Practice tests (in-app quiz)
+
+The dashboard's **Practice tests** card can build an interactive multiple-choice
+quiz from an exam guide. Paste the guide's PDF URL; the backend downloads it,
+extracts the text (`pypdf`), and asks a Foundation Model
+(`databricks-claude-sonnet-5`, via the endpoint's OpenAI-compatible
+`/invocations` route with a strict JSON schema) to return the exam outline
+(domains + weights) and a set of questions tagged by domain. Newly discovered
+domains are merged into the cert (existing domains keep their id + mastery).
+
+Taking a quiz logs a normal practice attempt (overall score) and updates each
+tested domain's mastery — so it flows into the same sparkline, readiness, and
+weighted-mastery views as a manually logged test. Generation calls a model and
+can take up to a couple of minutes.
 
 ## Local development
 
