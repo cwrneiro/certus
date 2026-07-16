@@ -47,3 +47,15 @@ color alone.
 
 Design principles: show progress don't perform it · calm under focus · one home
 for everything · respect the keyboard · warm not cute.
+
+## Session continuity
+
+`STATE.md` is the handoff note a fresh session reads after `/clear`. The read
+side is automatic: a `SessionStart` hook (`.claude/settings.json`) injects
+`STATE.md` into context on startup, resume, and clear. The write side is yours:
+
+- At the start of a session, if `STATE.md` was not already injected, read it
+  before doing anything else.
+- Before finishing a work chunk, update `STATE.md` and commit it with the work.
+- Keep it under half a page — it's a pointer, not a journal. History lives in
+  `git log` and the docs (`README.md`, `PRODUCT.md`, `DESIGN.md`).
