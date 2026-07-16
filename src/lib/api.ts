@@ -19,6 +19,13 @@ export async function fetchCertifications(): Promise<Certification[]> {
   return res.json()
 }
 
+/** Fetch a single certification — used to poll background quiz generation. */
+export async function fetchCertification(id: string): Promise<Certification> {
+  const res = await fetch(`/api/certifications/${encodeURIComponent(id)}`)
+  if (!res.ok) throw new Error('Failed to load certification')
+  return res.json()
+}
+
 export async function createCertification(
   input: NewCertInput,
 ): Promise<Certification> {
@@ -45,11 +52,11 @@ export async function updateCertification(
 }
 
 /**
- * Generate an in-app practice test from an exam-guide PDF. The backend fetches
- * the guide, extracts the outline + sample questions, and asks a Foundation
- * Model to write a multiple-choice set — persisting the questions (and any
- * newly discovered domains) onto the cert. Slow (a model call), so callers
- * should show a working state.
+ * Kick off in-app practice-test generation from an exam-guide PDF. The model
+ * call far exceeds the request timeout, so the backend runs it in the
+ * background and returns the cert immediately in its `quizStatus: 'generating'`
+ * state. Poll `fetchCertification` until `quizStatus` clears (success) or
+ * becomes `'error'`.
  */
 export async function generateQuiz(
   id: string,

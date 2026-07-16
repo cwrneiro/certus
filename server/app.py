@@ -114,6 +114,10 @@ CREATE TABLE IF NOT EXISTS {SCHEMA}.certifications (
 ALTER TABLE {SCHEMA}.certifications ADD COLUMN IF NOT EXISTS credential_url text;
 ALTER TABLE {SCHEMA}.certifications ADD COLUMN IF NOT EXISTS quiz_questions jsonb NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE {SCHEMA}.certifications ADD COLUMN IF NOT EXISTS exam_guide_url text;
+-- Generation runs in the background (it exceeds the Apps proxy timeout), so we
+-- track its state on the row: 'generating' | 'error' | NULL (idle/done).
+ALTER TABLE {SCHEMA}.certifications ADD COLUMN IF NOT EXISTS quiz_status text;
+ALTER TABLE {SCHEMA}.certifications ADD COLUMN IF NOT EXISTS quiz_error text;
 """
 
 
@@ -138,6 +142,8 @@ def _row_to_cert(r: dict) -> dict:
         "materials": r["materials"],
         "quizQuestions": r["quiz_questions"],
         "examGuideUrl": r["exam_guide_url"],
+        "quizStatus": r["quiz_status"],
+        "quizError": r["quiz_error"],
         "credentialUrl": r["credential_url"],
     }
 
@@ -629,8 +635,43 @@ class QuizGenerateRequest(BaseModel):
     guideUrl: str
 
 
-@app.post("/api/certifications/{cert_id}/quiz/generate")
+def _run_quiz_generation(cert_id: str, cert: dict, guide_url: str) -> None:
+    """Background worker: fetch the guide, generate the quiz, persist the result.
+    Runs off-request because the model call far exceeds the Apps proxy timeout.
+    Records success (quiz_status NULL) or failure (quiz_status 'error') on the row."""
+    try:
+        guide_text = _fetch_guide_text(guide_url)
+        result = _generate_quiz(cert, guide_text)
+        with get_conn() as conn:
+            conn.execute(
+                f"""UPDATE {SCHEMA}.certifications
+                    SET domains = %s, quiz_questions = %s, exam_guide_url = %s,
+                        quiz_status = NULL, quiz_error = NULL
+                    WHERE id = %s""",
+                (
+                    Json(result["domains"]),
+                    Json(result["quizQuestions"]),
+                    guide_url,
+                    cert_id,
+                ),
+            )
+    except Exception as exc:  # noqa: BLE001 — record any failure for the UI to show
+        detail = exc.detail if isinstance(exc, HTTPException) else str(exc)
+        try:
+            with get_conn() as conn:
+                conn.execute(
+                    f"""UPDATE {SCHEMA}.certifications
+                        SET quiz_status = 'error', quiz_error = %s WHERE id = %s""",
+                    (str(detail)[:500], cert_id),
+                )
+        except Exception:  # noqa: BLE001 — nothing more we can do
+            pass
+
+
+@app.post("/api/certifications/{cert_id}/quiz/generate", status_code=202)
 def generate_quiz(cert_id: str, body: QuizGenerateRequest):
+    """Start background generation and return the cert in its 'generating' state.
+    The client polls GET /api/certifications/{id} until quiz_status clears."""
     guide_url = body.guideUrl.strip()
     if not re.match(r"^https?://", guide_url, re.IGNORECASE):
         raise HTTPException(400, "Enter a valid http(s) link to the exam guide.")
@@ -642,26 +683,35 @@ def generate_quiz(cert_id: str, body: QuizGenerateRequest):
         if row is None:
             raise HTTPException(404, "Certification not found.")
         cert = _row_to_cert(cast("dict[str, Any]", row))
-
-    guide_text = _fetch_guide_text(guide_url)
-    result = _generate_quiz(cert, guide_text)
-
-    with get_conn() as conn:
+        # We don't hard-block a concurrent 'generating' state: an app restart can
+        # strand it, and a retry should always be able to recover.
         conn.execute(
             f"""UPDATE {SCHEMA}.certifications
-                SET domains = %s, quiz_questions = %s, exam_guide_url = %s
-                WHERE id = %s""",
-            (
-                Json(result["domains"]),
-                Json(result["quizQuestions"]),
-                guide_url,
-                cert_id,
-            ),
+                SET quiz_status = 'generating', quiz_error = NULL WHERE id = %s""",
+            (cert_id,),
         )
         updated = _one(
             conn.execute(f"SELECT * FROM {SCHEMA}.certifications WHERE id = %s", (cert_id,))
         )
+
+    threading.Thread(
+        target=_run_quiz_generation,
+        args=(cert_id, cert, guide_url),
+        daemon=True,
+    ).start()
     return _row_to_cert(updated)
+
+
+@app.get("/api/certifications/{cert_id}")
+def get_certification(cert_id: str):
+    """Single cert — used to poll generation status."""
+    with get_conn() as conn:
+        row = conn.execute(
+            f"SELECT * FROM {SCHEMA}.certifications WHERE id = %s", (cert_id,)
+        ).fetchone()
+    if row is None:
+        raise HTTPException(404, "Certification not found.")
+    return _row_to_cert(cast("dict[str, Any]", row))
 
 
 @app.delete("/api/certifications/{cert_id}", status_code=204)

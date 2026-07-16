@@ -1,11 +1,17 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Certification, CertPatch } from '../data/types'
 import { Sparkline } from './Sparkline'
 import { PracticeQuiz } from './PracticeQuiz'
-import { generateQuiz } from '../lib/api'
+import { generateQuiz, fetchCertification } from '../lib/api'
 import { sortedAttempts } from '../lib/metrics'
 import { formatDate, formatRelativeAgo } from '../lib/format'
-import { ExternalIcon, TargetIcon, PlusIcon, PlayIcon } from '../lib/icons'
+import {
+  ExternalIcon,
+  TargetIcon,
+  PlusIcon,
+  PlayIcon,
+  AlertIcon,
+} from '../lib/icons'
 import styles from './PracticeTests.module.css'
 import edit from './InlineEdit.module.css'
 
@@ -23,9 +29,30 @@ export function PracticeTests({
   const best = attempts.reduce((m, a) => Math.max(m, a.score), 0)
   const points = attempts.map((a) => ({ score: a.score, label: a.date }))
   const [logging, setLogging] = useState(false)
-  const [generating, setGenerating] = useState(false)
+  const [formOpen, setFormOpen] = useState(false)
   const [quizOpen, setQuizOpen] = useState(false)
   const hasQuiz = cert.quizQuestions.length > 0
+  const generating = cert.quizStatus === 'generating'
+
+  // While generation runs in the background, poll the cert until it clears.
+  const onReplaceRef = useRef(onReplace)
+  onReplaceRef.current = onReplace
+  useEffect(() => {
+    if (cert.quizStatus !== 'generating') return
+    let alive = true
+    const timer = setInterval(async () => {
+      try {
+        const fresh = await fetchCertification(cert.id)
+        if (alive && fresh.quizStatus !== 'generating') onReplaceRef.current(fresh)
+      } catch {
+        /* transient — keep polling */
+      }
+    }, 4000)
+    return () => {
+      alive = false
+      clearInterval(timer)
+    }
+  }, [cert.id, cert.quizStatus])
 
   return (
     <section className={styles.card} aria-labelledby="practice-heading">
@@ -47,15 +74,16 @@ export function PracticeTests({
       <QuizPanel
         cert={cert}
         hasQuiz={hasQuiz}
-        onTake={() => setQuizOpen(true)}
         generating={generating}
-        onGenerate={() => setGenerating(true)}
+        formOpen={formOpen}
+        onTake={() => setQuizOpen(true)}
+        onGenerate={() => setFormOpen(true)}
       />
-      {generating && (
+      {formOpen && !generating && (
         <GenerateQuizForm
           cert={cert}
           onReplace={onReplace}
-          onClose={() => setGenerating(false)}
+          onClose={() => setFormOpen(false)}
         />
       )}
       {quizOpen && (
@@ -132,24 +160,42 @@ export function PracticeTests({
 }
 
 /**
- * The in-app quiz call-to-action. With a question bank: a primary "Take
- * practice test" button. Without one: an invitation to build one from the
- * exam guide. Hidden while the generate form is open.
+ * The in-app quiz call-to-action. States: generating (a spinner note while the
+ * background job runs), a question bank ("Take practice test" + rebuild), a
+ * prior error, or the first-run invitation to build one from the exam guide.
+ * Hidden while the generate form is open.
  */
 function QuizPanel({
   cert,
   hasQuiz,
-  onTake,
   generating,
+  formOpen,
+  onTake,
   onGenerate,
 }: {
   cert: Certification
   hasQuiz: boolean
-  onTake: () => void
   generating: boolean
+  formOpen: boolean
+  onTake: () => void
   onGenerate: () => void
 }) {
-  if (generating) return null
+  if (generating) {
+    return (
+      <div className={styles.quizGenerating} role="status" aria-live="polite">
+        <span className={styles.spinner} aria-hidden="true" />
+        <span className={styles.generateText}>
+          <span className={styles.generateTitle}>Writing your practice test…</span>
+          <span className={styles.generateBody}>
+            Reading the guide and drafting questions. This can take a minute or
+            two — you can keep working; it'll appear here when it's ready.
+          </span>
+        </span>
+      </div>
+    )
+  }
+
+  if (formOpen) return null
 
   if (hasQuiz) {
     const n = cert.quizQuestions.length
@@ -170,21 +216,34 @@ function QuizPanel({
   }
 
   return (
-    <button type="button" className={styles.generateCard} onClick={onGenerate}>
-      <span className={styles.generateIcon} aria-hidden="true">
-        <TargetIcon size={20} />
-      </span>
-      <span className={styles.generateText}>
-        <span className={styles.generateTitle}>Build a practice test</span>
-        <span className={styles.generateBody}>
-          Paste the exam guide — we'll write questions from its outline.
+    <>
+      {cert.quizStatus === 'error' && cert.quizError && (
+        <p className={styles.quizError} role="alert">
+          <AlertIcon size={15} />
+          Last attempt failed: {cert.quizError}
+        </p>
+      )}
+      <button type="button" className={styles.generateCard} onClick={onGenerate}>
+        <span className={styles.generateIcon} aria-hidden="true">
+          <TargetIcon size={20} />
         </span>
-      </span>
-    </button>
+        <span className={styles.generateText}>
+          <span className={styles.generateTitle}>Build a practice test</span>
+          <span className={styles.generateBody}>
+            Paste the exam guide — we'll write questions from its outline.
+          </span>
+        </span>
+      </button>
+    </>
   )
 }
 
-/** Paste an exam-guide URL; the backend fetches it and generates a quiz. */
+/**
+ * Paste an exam-guide URL to start generation. The backend runs the model call
+ * in the background (it exceeds the request timeout) and returns immediately in
+ * a `generating` state; the parent then polls until questions land. So this
+ * form just kicks the job off and closes — the QuizPanel shows progress.
+ */
 function GenerateQuizForm({
   cert,
   onReplace,
@@ -208,8 +267,9 @@ function GenerateQuizForm({
     setBusy(true)
     setError(null)
     try {
-      const updated = await generateQuiz(cert.id, guide)
-      onReplace(updated)
+      // Returns the cert in its 'generating' state; the parent polls from here.
+      const started = await generateQuiz(cert.id, guide)
+      onReplace(started)
       onClose()
     } catch (err) {
       setError(
@@ -238,9 +298,8 @@ function GenerateQuizForm({
           disabled={busy}
         />
         <span className={edit.hint}>
-          {busy
-            ? 'Reading the guide and writing questions — this takes a moment…'
-            : 'The outline and any sample questions shape the test. Existing topics keep their mastery.'}
+          The outline and any sample questions shape the test. Existing topics
+          keep their mastery.
         </span>
       </div>
 
@@ -261,7 +320,7 @@ function GenerateQuizForm({
         </button>
         <button type="submit" className={edit.primary} disabled={busy}>
           <TargetIcon size={15} />
-          {busy ? 'Generating…' : 'Generate test'}
+          {busy ? 'Starting…' : 'Generate test'}
         </button>
       </div>
     </form>

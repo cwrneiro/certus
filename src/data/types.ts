@@ -65,6 +65,10 @@ export interface Certification {
   quizQuestions: QuizQuestion[]
   /** The exam-guide PDF the quiz was generated from, if any. */
   examGuideUrl?: string
+  /** Background quiz generation state: 'generating' | 'error' | null (idle/done). */
+  quizStatus?: 'generating' | 'error' | null
+  /** Message when the last generation failed. */
+  quizError?: string | null
   /** Minutes studied this week (honest activity, not a streak). */
   focusMinutesThisWeek?: number
   /** Public verification URL for an earned credential (badge page). */
