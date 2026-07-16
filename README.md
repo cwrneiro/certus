@@ -67,6 +67,7 @@ One table, `certus.certifications`, with the nested arrays stored as JSONB (they
 | `exam_date`, `passing_score`, `achieved_score` | achieved score only for `passed` |
 | `domains`, `attempts`, `materials`, `quiz_questions` | `jsonb` |
 | `exam_guide_url` | source guide the practice test was generated from |
+| `quiz_status`, `quiz_error` | background generation state (`generating` · `error` · NULL) |
 | `credential_url` | public badge/verification link |
 | `sort_order`, `created_at` | ordering |
 
@@ -75,9 +76,10 @@ One table, `certus.certifications`, with the nested arrays stored as JSONB (they
 | Method | Route | Purpose |
 |--------|-------|---------|
 | `GET` | `/api/certifications` | list all (ordered) |
+| `GET` | `/api/certifications/{id}` | one cert (used to poll quiz generation) |
 | `POST` | `/api/certifications` | add one (validated) |
 | `PATCH` | `/api/certifications/{id}` | partial update (status, scores, domains, attempts, materials) |
-| `POST` | `/api/certifications/{id}/quiz/generate` | build an in-app practice test from an exam-guide URL |
+| `POST` | `/api/certifications/{id}/quiz/generate` | start async practice-test generation (returns `202`) |
 | `DELETE` | `/api/certifications/{id}` | remove one |
 
 ### Practice tests (in-app quiz)
@@ -86,14 +88,22 @@ The dashboard's **Practice tests** card can build an interactive multiple-choice
 quiz from an exam guide. Paste the guide's PDF URL; the backend downloads it,
 extracts the text (`pypdf`), and asks a Foundation Model
 (`databricks-claude-sonnet-5`, via the endpoint's OpenAI-compatible
-`/invocations` route with a strict JSON schema) to return the exam outline
-(domains + weights) and a set of questions tagged by domain. Newly discovered
-domains are merged into the cert (existing domains keep their id + mastery).
+`/invocations` route with a strict JSON schema) to produce the exam outline
+(domains + weights) and questions tagged by domain. Newly discovered domains
+are merged into the cert (existing domains keep their id + mastery).
+
+**Generation is asynchronous.** A single model call for the whole test exceeds
+the Databricks Apps proxy's 300s request cap, so `POST .../quiz/generate` marks
+the row `quiz_status = 'generating'`, starts a background thread, and returns
+`202` immediately. The thread runs generation in two phases — one call for the
+outline, then question batches (5 each) **in parallel** across a thread pool, so
+the whole thing finishes in well under a minute (~45s) instead of timing out.
+The frontend polls `GET /api/certifications/{id}` every 4s until `quiz_status`
+clears (done) or becomes `'error'` (message stored in `quiz_error`).
 
 Taking a quiz logs a normal practice attempt (overall score) and updates each
 tested domain's mastery — so it flows into the same sparkline, readiness, and
-weighted-mastery views as a manually logged test. Generation calls a model and
-can take up to a couple of minutes.
+weighted-mastery views as a manually logged test.
 
 ## Local development
 

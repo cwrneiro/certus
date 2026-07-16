@@ -1,33 +1,30 @@
 # STATE — session handoff
 
 ## Current focus
-AI-generated in-app practice tests. New: paste an exam-guide PDF URL on the
-dashboard's Practice tests card → backend fetches + parses it and a Foundation
-Model writes a multiple-choice quiz. Taking the quiz logs a practice attempt +
-per-domain mastery through the existing update path.
+Shipped: AI-generated in-app practice tests. On the dashboard's Practice tests
+card, paste an exam-guide PDF URL → backend generates a multiple-choice quiz in
+the background → "Take practice test" opens a keyboard-first quiz whose result
+logs a practice attempt + per-domain mastery through the existing update path.
 
 ## Last completed
-Built the feature end-to-end (not yet committed or deployed):
-- `types.ts`: `QuizQuestion`/`QuizOption`, `Certification.quizQuestions` + `examGuideUrl`.
-- `server/app.py`: `quiz_questions`/`exam_guide_url` columns (additive migration),
-  `POST /api/certifications/{id}/quiz/generate` (httpx + pypdf + FMAPI via
-  `api_client.do` on `/serving-endpoints/{model}/invocations` with strict JSON schema).
-- Frontend: `PracticeQuiz.tsx` (keyboard-first modal + results), quiz entry
-  points in `PracticeTests.tsx`, `onReplace` threaded App→Dashboard→PracticeTests.
-- `requirements.txt`: +httpx +pypdf. README data-model/API updated.
-- Verified: `npm run build` clean; `_assemble_quiz` unit-checked; live end-to-end
-  generation against the real Databricks guide PDF works.
+Feature built, verified live, and deployed on branch `practice-tests` (3 commits:
+initial feature → async generation → parallel batching). Live on the app.
 
 ## Next step
-Commit, then deploy (see README). Consider deploy-time verify of the generate
-endpoint against Lakebase.
+Open a PR from `practice-tests` when ready. Consider `/review` first.
 
 ## Gotchas / in-flight decisions
-- **Model params:** `databricks-claude-sonnet-5` rejects `temperature` — omitted.
-- **Latency:** generation can take ~2 min (15 Q @ 8000 tokens). UI shows a
-  working state; watch the Databricks Apps proxy timeout on deploy.
-- Model call uses `api_client.do` (not `serving_endpoints.query`) so it's robust
-  across SDK versions and can pass `response_format`.
+- **Apps proxy caps requests at 300s.** Generation MUST stay async: POST
+  .../quiz/generate returns 202 + `quiz_status='generating'`, a background thread
+  does the work, frontend polls GET /api/certifications/{id} every 4s.
+- **Per-request SDK timeout is also 300s.** A single 15-question call blew past
+  it, so generation is split: 1 outline call + parallel 5-question batches via a
+  thread pool. End-to-end ~45s live. `_model_w` uses http_timeout_seconds=600.
+- `databricks-claude-sonnet-5` rejects `temperature` (omitted). The endpoint
+  sometimes double-encodes a list field as a JSON string → `_extract_list` unwraps.
+- Batches slightly over-produce (asked 15, got ~20) — harmless.
+- Model call uses `api_client.do` on `/serving-endpoints/{model}/invocations`
+  (robust across SDK versions; accepts response_format).
 - Keep `src/data/types.ts`, `server/app.py` (row mapping + inserts), and
   `server/seed.json` in sync when types change.
 - Deploy-first: the app's service principal must own the `certus` Lakebase
