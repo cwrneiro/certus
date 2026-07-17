@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Certification, CertPatch } from '../data/types'
 import { Sparkline } from './Sparkline'
-import { PracticeQuiz } from './PracticeQuiz'
 import { generateQuiz, fetchCertification } from '../lib/api'
 import { sortedAttempts } from '../lib/metrics'
 import { formatDate, formatRelativeAgo } from '../lib/format'
@@ -19,18 +18,20 @@ export function PracticeTests({
   cert,
   onUpdate,
   onReplace,
+  onTakeQuiz,
 }: {
   cert: Certification
   onUpdate: (id: string, patch: CertPatch) => Promise<Certification>
   /** Swap a full cert into app state — used after quiz generation. */
   onReplace: (cert: Certification) => void
+  /** Open the full-screen practice test for this cert. */
+  onTakeQuiz: (id: string) => void
 }) {
   const attempts = sortedAttempts(cert)
   const best = attempts.reduce((m, a) => Math.max(m, a.score), 0)
   const points = attempts.map((a) => ({ score: a.score, label: a.date }))
   const [logging, setLogging] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
-  const [quizOpen, setQuizOpen] = useState(false)
   const hasQuiz = cert.quizQuestions.length > 0
   const generating = cert.quizStatus === 'generating'
 
@@ -76,7 +77,7 @@ export function PracticeTests({
         hasQuiz={hasQuiz}
         generating={generating}
         formOpen={formOpen}
-        onTake={() => setQuizOpen(true)}
+        onTake={() => onTakeQuiz(cert.id)}
         onGenerate={() => setFormOpen(true)}
       />
       {formOpen && !generating && (
@@ -84,13 +85,6 @@ export function PracticeTests({
           cert={cert}
           onReplace={onReplace}
           onClose={() => setFormOpen(false)}
-        />
-      )}
-      {quizOpen && (
-        <PracticeQuiz
-          cert={cert}
-          onUpdate={onUpdate}
-          onClose={() => setQuizOpen(false)}
         />
       )}
 

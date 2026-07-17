@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Certification, CertPatch, QuizQuestion } from '../data/types'
 import {
   XIcon,
@@ -13,23 +13,24 @@ import { masteryBand } from '../lib/metrics'
 import styles from './PracticeQuiz.module.css'
 
 /**
- * A keyboard-first, in-app practice test built from the cert's AI-generated
- * questions. One question at a time; on finish it shows a results screen and
- * logs the run as a practice attempt (overall score + per-domain mastery) via
- * the same patch the manual log form uses — so the sparkline and readiness
- * update for free. Keys: 1–9 to pick an option, Enter/→ next, ← back, Esc close.
+ * A full-screen, distraction-free practice test built from the cert's
+ * AI-generated questions — its own route (`#/quiz/<certId>`), no sidebar, one
+ * question at a time. On finish it shows a results screen and logs the run as a
+ * practice attempt (overall score + per-domain mastery) via the same patch the
+ * manual log form uses — so the sparkline and readiness update for free.
+ * Keys: 1–9 pick an option, Enter/→ next, ← back.
  */
 export function PracticeQuiz({
   cert,
-  onClose,
+  onExit,
   onUpdate,
 }: {
   cert: Certification
-  onClose: () => void
+  /** Leave the quiz and return to the dashboard. */
+  onExit: () => void
   onUpdate: (id: string, patch: CertPatch) => Promise<Certification>
 }) {
   const questions = cert.quizQuestions
-  const dialogRef = useRef<HTMLDivElement>(null)
 
   // answers[questionId] = chosen optionId
   const [answers, setAnswers] = useState<Record<string, string>>({})
@@ -45,10 +46,6 @@ export function PracticeQuiz({
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        onClose()
-        return
-      }
       if (submitted) return
       if (e.key >= '1' && e.key <= '9') {
         const idx = Number(e.key) - 1
@@ -60,19 +57,28 @@ export function PracticeQuiz({
       }
     }
     document.addEventListener('keydown', onKey)
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    dialogRef.current?.focus()
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = prevOverflow
-    }
+    return () => document.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current, submitted, q, total, onClose])
+  }, [current, submitted, q, total])
+
+  // Return to the top when moving between questions or into the results.
+  useEffect(() => {
+    window.scrollTo({ top: 0 })
+  }, [current, submitted])
 
   function choose(optionId: string) {
     if (!q) return
     setAnswers((prev) => ({ ...prev, [q.id]: optionId }))
+  }
+
+  function requestExit() {
+    if (submitted || answeredCount === 0) {
+      onExit()
+      return
+    }
+    if (window.confirm('Leave the practice test? Your progress will be lost.')) {
+      onExit()
+    }
   }
 
   const result = useMemo(() => scoreQuiz(cert, answers), [cert, answers])
@@ -118,33 +124,20 @@ export function PracticeQuiz({
   const titleId = `quiz-${cert.id}`
 
   return (
-    <div className={styles.overlay} onClick={onClose} role="presentation">
-      <div
-        ref={dialogRef}
-        className={styles.dialog}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <header className={styles.head}>
+    <div className={styles.page}>
+      <header className={styles.topbar}>
+        <div className={styles.topbarInner}>
           <div className={styles.headText}>
             <p className={styles.eyebrow}>{cert.shortName || cert.name}</p>
-            <h2 id={titleId} className={styles.headTitle}>
+            <h1 id={titleId} className={styles.headTitle}>
               {submitted ? 'Your results' : 'Practice test'}
-            </h2>
+            </h1>
           </div>
-          <button
-            type="button"
-            className={styles.close}
-            onClick={onClose}
-            aria-label="Close practice test"
-          >
-            <XIcon size={18} />
+          <button type="button" className={styles.exit} onClick={requestExit}>
+            <XIcon size={16} />
+            {submitted ? 'Done' : 'Exit'}
           </button>
-        </header>
-
+        </div>
         {!submitted && (
           <div
             className={styles.progressTrack}
@@ -160,9 +153,20 @@ export function PracticeQuiz({
             />
           </div>
         )}
+      </header>
 
+      <main className={styles.content} aria-labelledby={titleId}>
         {submitted ? (
-          <ResultsBody cert={cert} answers={answers} result={result} passed={passed} />
+          <div className={styles.body}>
+            <ResultsBody cert={cert} answers={answers} result={result} passed={passed} />
+            <div className={styles.nav}>
+              <span />
+              <button type="button" className={styles.navPrimary} onClick={onExit}>
+                <CheckCircleIcon size={16} />
+                Back to dashboard
+              </button>
+            </div>
+          </div>
         ) : (
           <div className={styles.body}>
             <div className={styles.qMeta}>
@@ -247,7 +251,7 @@ export function PracticeQuiz({
             )}
           </div>
         )}
-      </div>
+      </main>
     </div>
   )
 }

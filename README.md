@@ -101,9 +101,11 @@ the whole thing finishes in well under a minute (~45s) instead of timing out.
 The frontend polls `GET /api/certifications/{id}` every 4s until `quiz_status`
 clears (done) or becomes `'error'` (message stored in `quiz_error`).
 
-Taking a quiz logs a normal practice attempt (overall score) and updates each
-tested domain's mastery — so it flows into the same sparkline, readiness, and
-weighted-mastery views as a manually logged test.
+Taking a quiz opens a **full-screen, distraction-free view** (its own route,
+`#/quiz/<certId>`, rendered outside the sidebar shell — one question at a time,
+keyboard-first). On finish it logs a normal practice attempt (overall score) and
+updates each tested domain's mastery — so it flows into the same sparkline,
+readiness, and weighted-mastery views as a manually logged test.
 
 ## Local development
 

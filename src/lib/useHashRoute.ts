@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
    (#/certifications) and the browser back button works, while nav
    items stay real anchors — keyboard-first, no router dependency. */
 
+/** Routes that appear in the sidebar nav. */
 export const ROUTES = [
   'dashboard',
   'certifications',
@@ -11,35 +12,51 @@ export const ROUTES = [
   'schedule',
 ] as const
 
-export type Route = (typeof ROUTES)[number]
+export type NavRoute = (typeof ROUTES)[number]
+/** All views. `quiz` is a full-screen, distraction-free view (no sidebar) and
+    carries the certification id as a path param: `#/quiz/<certId>`. */
+export type Route = NavRoute | 'quiz'
 
-function parse(hash: string): Route {
-  const seg = hash.replace(/^#\/?/, '').split('/')[0]
-  return (ROUTES as readonly string[]).includes(seg) ? (seg as Route) : 'dashboard'
+interface Location {
+  route: Route
+  /** Path param after the route segment (used by `quiz`). */
+  param?: string
+}
+
+function parse(hash: string): Location {
+  const parts = hash.replace(/^#\/?/, '').split('/')
+  const seg = parts[0]
+  if (seg === 'quiz') {
+    return { route: 'quiz', param: parts[1] ? decodeURIComponent(parts[1]) : undefined }
+  }
+  return {
+    route: (ROUTES as readonly string[]).includes(seg) ? (seg as Route) : 'dashboard',
+  }
 }
 
 /** The canonical href for a route, for use on real `<a>` elements. */
-export function routeHref(route: Route): string {
-  return `#/${route}`
+export function routeHref(route: Route, param?: string): string {
+  return param ? `#/${route}/${encodeURIComponent(param)}` : `#/${route}`
 }
 
 export function useHashRoute() {
-  const [route, setRoute] = useState<Route>(() =>
-    typeof window === 'undefined' ? 'dashboard' : parse(window.location.hash),
+  const [loc, setLoc] = useState<Location>(() =>
+    typeof window === 'undefined' ? { route: 'dashboard' } : parse(window.location.hash),
   )
 
   useEffect(() => {
-    const onChange = () => setRoute(parse(window.location.hash))
+    const onChange = () => setLoc(parse(window.location.hash))
     window.addEventListener('hashchange', onChange)
     return () => window.removeEventListener('hashchange', onChange)
   }, [])
 
-  const navigate = useCallback((next: Route) => {
-    if (parse(window.location.hash) !== next) {
-      window.location.hash = routeHref(next)
+  const navigate = useCallback((next: Route, param?: string) => {
+    const href = routeHref(next, param)
+    if (window.location.hash !== href) {
+      window.location.hash = href
     }
-    setRoute(next)
+    setLoc({ route: next, param })
   }, [])
 
-  return { route, navigate }
+  return { route: loc.route, param: loc.param, navigate }
 }

@@ -4,6 +4,7 @@ import { DashboardPage } from './pages/DashboardPage'
 import { CertificationsPage } from './pages/CertificationsPage'
 import { MaterialsPage } from './pages/MaterialsPage'
 import { SchedulePage } from './pages/SchedulePage'
+import { PracticeQuiz } from './components/PracticeQuiz'
 import { EmptyState } from './components/EmptyState'
 import { LoadState } from './components/LoadState'
 import { MenuIcon } from './lib/icons'
@@ -23,7 +24,7 @@ export default function App() {
   // Empty until the user picks one; DashboardPage falls back to the most active cert.
   const [focusId, setFocusId] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
-  const { route, navigate } = useHashRoute()
+  const { route, param, navigate } = useHashRoute()
 
   const load = useCallback(async () => {
     setLoadError(false)
@@ -59,6 +60,11 @@ export default function App() {
   function openCert(id: string) {
     setFocusId(id)
     navigate('dashboard')
+  }
+
+  function takeQuiz(id: string) {
+    setFocusId(id)
+    navigate('quiz', id)
   }
 
   async function addCert(input: NewCertInput): Promise<void> {
@@ -101,9 +107,32 @@ export default function App() {
             onFocus={setFocusId}
             onUpdate={updateCert}
             onReplace={replaceCert}
+            onTakeQuiz={takeQuiz}
           />
         )
     }
+  }
+
+  // The practice test is a full-screen, distraction-free view — rendered
+  // outside the sidebar shell.
+  const quizCert =
+    route === 'quiz' && certs ? certs.find((c) => c.id === param) : undefined
+  const showQuiz = !!quizCert && quizCert.quizQuestions.length > 0
+
+  // Redirect stale quiz deep-links (unknown cert / no questions) back home.
+  useEffect(() => {
+    if (route === 'quiz' && certs !== null && !showQuiz) navigate('dashboard')
+  }, [route, certs, showQuiz, navigate])
+
+  if (showQuiz) {
+    return (
+      <PracticeQuiz
+        key={quizCert.id}
+        cert={quizCert}
+        onUpdate={updateCert}
+        onExit={() => navigate('dashboard')}
+      />
+    )
   }
 
   return (
