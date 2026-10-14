@@ -7,14 +7,13 @@ the background → "Take practice test" opens a keyboard-first quiz whose result
 logs a practice attempt + per-domain mastery through the existing update path.
 
 ## Last completed
-Feature built and verified on branch `practice-tests`: initial feature → async
-generation → parallel batching → docs → **full-screen quiz view** (its own
-`#/quiz/<certId>` route, no sidebar; browser-verified). Earlier commits are
-deployed; the full-screen-view commit is not yet deployed.
+Practice-tests feature merged into `main` (initial feature → async generation →
+parallel batching → full-screen `#/quiz/<certId>` view → harder exam-style
+questions with shuffled options). Earlier commits are deployed; the full-screen
+view and question-quality commits are not yet deployed.
 
 ## Next step
-Deploy the full-screen-view commit (see README), then open a PR from
-`practice-tests`. Consider `/review` first.
+Deploy `main` (see README).
 
 ## Gotchas / in-flight decisions
 - **Apps proxy caps requests at 300s.** Generation MUST stay async: POST

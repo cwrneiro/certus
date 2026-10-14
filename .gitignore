@@ -20,6 +20,9 @@ server/seed.json
 .impeccable/hook.cache.json
 .impeccable/config.local.json
 
+# Local tool state
+.isaac/
+
 # OS / editor
 .DS_Store
 *.swp
