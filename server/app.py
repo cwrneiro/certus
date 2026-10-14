@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import random
 import re
 import threading
 import time
@@ -348,13 +349,32 @@ def _fetch_guide_text(url: str) -> str:
 
 
 QUIZ_SYSTEM_PROMPT = (
-    "You are an expert certification exam-prep author. Given the text of an "
-    "official certification exam guide, you produce (1) the exam's outline as a "
-    "list of domains with their exam weight, and (2) a set of high-quality "
-    "multiple-choice practice questions that reflect the real exam's style, "
-    "difficulty, and topic distribution. Each question has exactly one correct "
-    "answer and a short explanation. Base questions on the guide's actual "
-    "objectives and any sample questions it contains. Respond with JSON only."
+    "You are a psychometric item writer for professional certification exams. "
+    "You write multiple-choice questions at genuine exam difficulty — the level "
+    "that makes an unprepared but intelligent candidate fail. Follow these rules "
+    "strictly:\n"
+    "- Test application and judgment, not recall. Prefer scenario questions "
+    "('Given X, what should you do / why is Y happening / which approach is "
+    "best?') over definition lookups. The candidate should have to reason, not "
+    "just recognize a term.\n"
+    "- Every distractor must be PLAUSIBLE: a common misconception, a partially "
+    "correct answer that fails on a detail, a right-idea/wrong-context answer, or "
+    "something that sounds authoritative. A knowledgeable person should have to "
+    "think to rule it out. Never use obviously wrong, joke, or throwaway options.\n"
+    "- Make the correct answer indistinguishable by form. This is critical: item "
+    "writers habitually make the correct option the longest and most detailed one, "
+    "which lets test-takers guess without knowing the material. You must NOT do "
+    "this. Write every option to 12-20 words. As a hard check: at least one of "
+    "the DISTRACTORS must be as long as or longer than the correct answer, so the "
+    "correct answer is never the single longest option. Give distractors the same "
+    "specific detail and confident tone as the correct one.\n"
+    "- Provide EXACTLY four options. Never use 'all of the above', 'none of the "
+    "above', or absolute-word tells like 'always'/'never' that hint at the answer.\n"
+    "- Ground every question in the guide's actual objectives; where the guide "
+    "includes sample questions, match their style and rigor. The explanation "
+    "should say why the answer is right AND briefly why the tempting distractor "
+    "is wrong.\n"
+    "Respond with JSON only."
 )
 
 
@@ -491,17 +511,30 @@ def _generate_quiz(cert: dict, guide_text: str) -> dict:
         )
         prompt = (
             f"Certification: {label}.\n"
-            f"Write {want} multiple-choice practice questions (each with exactly "
-            "4 options, one correct, plus a short explanation). Tag each with the "
-            "domain it tests, chosen from: "
+            f"Write {want} exam-difficulty multiple-choice questions (each with "
+            "exactly 4 options, one correct, plus an explanation). Tag each with "
+            "the domain it tests, chosen from: "
             f"{', '.join(domain_names)}.\n"
-            "Distribute across those domains by exam weight. This is batch "
-            f"{i + 1} of {batch_count} — make these questions distinct from a "
-            "typical set (vary the domains and scenarios). Exam guide:\n\n"
+            "Requirements: each question is a realistic scenario that requires "
+            "applying a concept or choosing between valid-sounding approaches — "
+            "not recalling a definition. All four options must be plausible and "
+            "similar in length/specificity, with distractors drawn from common "
+            "misconceptions or subtly-wrong reasoning; the correct answer must not "
+            "stand out by form. Distribute across the domains above by exam "
+            "weight. This is batch "
+            f"{i + 1} of {batch_count} — make these distinct from a typical set "
+            "(vary the domains, scenarios, and the correct-option position). "
+            "Exam guide:\n\n"
             f"{guide_excerpt}"
         )
-        out = _model_json(prompt, _questions_schema(), "practice_questions")
-        return _extract_list(out, "questions")
+        # Retry once if a batch comes back empty (the endpoint occasionally
+        # returns no content), so one bad call doesn't cost us a whole batch.
+        for _ in range(2):
+            out = _model_json(prompt, _questions_schema(), "practice_questions")
+            questions = _extract_list(out, "questions")
+            if questions:
+                return questions
+        return []
 
     raw_questions: list[dict] = []
     errors: list[str] = []
@@ -561,7 +594,9 @@ def _build_questions(domains: list[dict], raw: list[dict]) -> list[dict]:
         prompt = str(q.get("prompt", "")).strip()
         opts = q.get("options") or []
         idx = q.get("correctIndex")
-        if not prompt or not isinstance(opts, list) or len(opts) < 2:
+        # Require exactly 4 options — anything else means the model added a
+        # filler like "None of the above" or dropped one; skip it.
+        if not prompt or not isinstance(opts, list) or len(opts) != 4:
             continue
         if not isinstance(idx, int) or not 0 <= idx < len(opts):
             continue
@@ -569,6 +604,11 @@ def _build_questions(domains: list[dict], raw: list[dict]) -> list[dict]:
             {"id": f"o-{uuid.uuid4().hex[:6]}", "text": str(o).strip()}
             for o in opts
         ]
+        correct_id = options[idx]["id"]
+        # Shuffle so the correct answer's position is uniform — the model tends
+        # to cluster it (e.g. never last), which is a giveaway on its own. The
+        # correctOptionId travels with the option, so shuffling is safe.
+        random.shuffle(options)
         dname = str(q.get("domain", "")).strip().lower()
         domain_id = by_name[dname]["id"] if dname in by_name else None
         questions.append(
@@ -576,7 +616,7 @@ def _build_questions(domains: list[dict], raw: list[dict]) -> list[dict]:
                 "id": f"q-{uuid.uuid4().hex[:8]}",
                 "prompt": prompt,
                 "options": options,
-                "correctOptionId": options[idx]["id"],
+                "correctOptionId": correct_id,
                 "explanation": str(q.get("explanation", "")).strip(),
                 **({"domainId": domain_id} if domain_id else {}),
             }
