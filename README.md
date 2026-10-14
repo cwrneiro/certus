@@ -1,122 +1,165 @@
 # Certus — Certification Tracker
 
-A calm, warm home base for studying toward professional certifications: centralize
-study material, track exam prep and progress, and keep every earned credential in
-one place.
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![React 18](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-Python-009688?logo=fastapi&logoColor=white)
+![Databricks Apps](https://img.shields.io/badge/runs%20on-Databricks%20Apps-FF3621?logo=databricks&logoColor=white)
 
-Deployed as a Databricks App (sign-in required).
+A personal home base for studying toward professional certifications.
 
----
+**Why it exists:** studying for a certification usually means a spreadsheet of
+exam dates, a dozen bookmarked PDFs, and a vague sense of "am I ready yet?"
+Certus puts all of that in one calm place. It shows which exam is next, how
+ready you are for each topic, and what to study today. It can also generate a
+practice test from the official exam guide.
 
-## Stack
+## Contents
 
-| Layer | Tech |
-|------|------|
-| Frontend | React 18 + TypeScript + Vite, CSS Modules (design tokens in `src/styles/`) |
-| Routing | Dependency-free hash router (`src/lib/useHashRoute.ts`) |
-| Backend | FastAPI (Python) — `server/app.py` |
-| Database | Lakebase (Databricks serverless Postgres, Autoscaling) |
-| AI | Databricks Foundation Model API (practice-test generation) |
-| Hosting | Databricks Apps |
+- [Features](#features)
+- [Requirements](#requirements)
+- [Setup](#setup)
+- [Usage](#usage)
+- [Local development](#local-development)
+- [How it works](#how-it-works)
+- [Troubleshooting](#troubleshooting)
+- [Further reading](#further-reading)
+- [License](#license)
+- [Contact](#contact)
 
-The frontend is a static SPA. In production the FastAPI backend serves the built
-`dist/` **and** a small CRUD API over Lakebase — one process, one origin, no CORS.
+## Features
 
-## Architecture
+- **Dashboard.** Your next exam, how ready you are, and the topics to study next.
+- **Certifications.** Every cert you're pursuing or have earned, with its exam
+  date, passing score, and credential link.
+- **Topic mastery.** Rate each exam domain, weighted by how much of the exam it
+  covers.
+- **Practice tests.** Log scores from any practice exam, or have Certus generate
+  a multiple-choice quiz from the exam guide PDF.
+- **Materials.** Keep every study link and resource next to the cert it belongs to.
+- **Schedule.** A calendar and timeline of upcoming exams.
+- **Light and dark themes**, keyboard-friendly, WCAG AA contrast.
 
+## Requirements
+
+- A **Databricks workspace** with these enabled:
+  - [Databricks Apps](https://docs.databricks.com/en/dev-tools/databricks-apps/index.html)
+    (hosting and sign-in)
+  - [Lakebase](https://docs.databricks.com/en/oltp/index.html) (the Postgres
+    database that stores your data)
+  - Foundation Model APIs with the `databricks-claude-sonnet-5` endpoint (only
+    needed for generated practice tests)
+- The [Databricks CLI](https://docs.databricks.com/en/dev-tools/cli/install.html),
+  logged in to that workspace (`databricks auth login`)
+- [Node.js](https://nodejs.org/) 18 or newer, to build the frontend
+
+## Setup
+
+The commands below use two placeholders. Replace `<your-profile>` with your
+Databricks CLI profile name and `<you>` with your workspace username (usually
+your email).
+
+**1. Clone and build the frontend**
+
+```bash
+git clone https://github.com/cwrneiro/certus.git
+cd certus
+npm ci
+npm run build
 ```
-Browser ──▶ Databricks Apps proxy (SSO) ──▶ uvicorn / FastAPI (server/app.py)
-                                              ├─ GET/POST/DELETE /api/certifications
-                                              │     └─ psycopg3 ──▶ Lakebase Postgres
-                                              │                     (schema "certus")
-                                              └─ static files  ──▶ dist/  (React SPA)
+
+**2. Create the database and the app**
+
+```bash
+databricks postgres create-project certus --profile <your-profile>
+databricks apps create certus --profile <your-profile>
 ```
 
-Routing is hash-based (`#/dashboard`, `#/certifications`, …), so the server only
-ever serves `/` and hashed asset paths — no history-fallback rewriting needed.
+**3. Connect the database to the app**
 
-## Project structure
+In the workspace UI, open **Compute → Apps → certus → Edit**, add a
+**Lakebase database** resource pointing at the `certus` project, give it the
+key **`postgres`**, and grant **Can connect and create**. The key must be
+exactly `postgres`, because `app.yaml` reads the connection details from it.
 
-```
-├── index.html              # Vite entry; loads Figtree + sets theme pre-paint
-├── src/
-│   ├── App.tsx             # Shell: data fetch, routing, loading/error states
-│   ├── pages/              # DashboardPage, CertificationsPage, MaterialsPage, SchedulePage
-│   ├── components/         # FocusCert, CertCard, ScheduleCalendar, Segmented, AddCertForm, …
-│   ├── lib/                # api.ts (backend client), useHashRoute, metrics, format, icons
-│   ├── data/types.ts       # Shared TypeScript types (Certification, Domain, …)
-│   └── styles/             # tokens.css (design tokens) + base.css (reset)
-├── server/
-│   └── app.py              # FastAPI: schema init, seed, CRUD API, static serving
-├── requirements.txt        # Python deps (fastapi, uvicorn, psycopg, databricks-sdk)
-├── app.yaml                # Databricks Apps runtime config (command + LAKEBASE_ENDPOINT)
-├── PRODUCT.md              # Product strategy & voice
-└── DESIGN.md              # Visual design system ("The Warm Ledger")
+**4. Deploy**
+
+Copy only the files the app needs into a clean folder, upload it, and deploy:
+
+```bash
+rm -rf /tmp/certus-deploy && mkdir /tmp/certus-deploy
+rsync -a --exclude __pycache__ app.yaml requirements.txt server dist /tmp/certus-deploy/
+databricks sync /tmp/certus-deploy /Workspace/Users/<you>/certus --profile <your-profile>
+databricks apps deploy certus --source-code-path /Workspace/Users/<you>/certus --profile <your-profile>
 ```
 
-## Data model
+**5. Check that it started**
 
-One table, `certus.certifications`, with the nested arrays stored as JSONB (they map
-1:1 to the frontend `Certification` shape, so no joins are needed):
+```bash
+databricks apps logs certus --profile <your-profile>
+```
 
-| Column | Notes |
-|--------|-------|
-| `id` (PK), `provider`, `name`, `short_name`, `status` | `status` ∈ `queued` · `in-progress` · `scheduled` · `passed` |
-| `exam_date`, `passing_score`, `achieved_score` | achieved score only for `passed` |
-| `domains`, `attempts`, `materials`, `quiz_questions` | `jsonb` |
-| `exam_guide_url` | source guide the practice test was generated from |
-| `quiz_status`, `quiz_error` | background generation state (`generating` · `error` · NULL) |
-| `credential_url` | public badge/verification link |
-| `sort_order`, `created_at` | ordering |
+Look for `Application startup complete`, then open the app URL shown by
+`databricks apps get certus --profile <your-profile>`.
 
-### API
+To redeploy after making changes, run `npm run build` again and repeat step 4.
 
-| Method | Route | Purpose |
-|--------|-------|---------|
-| `GET` | `/api/certifications` | list all (ordered) |
-| `GET` | `/api/certifications/{id}` | one cert (used to poll quiz generation) |
-| `POST` | `/api/certifications` | add one (validated) |
-| `PATCH` | `/api/certifications/{id}` | partial update (status, scores, domains, attempts, materials) |
-| `POST` | `/api/certifications/{id}/quiz/generate` | start async practice-test generation (returns `202`) |
-| `DELETE` | `/api/certifications/{id}` | remove one |
+### Optional: start with sample data
 
-### Practice tests (in-app quiz)
+When the table is empty on first startup, the backend loads `server/seed.json`
+if that file exists. It's gitignored so your personal data stays out of the
+repo. To use it, create the file as a JSON array of certifications (the shape is
+`Certification` in [`src/data/types.ts`](src/data/types.ts)), then deploy:
 
-The dashboard's **Practice tests** card can build an interactive multiple-choice
-quiz from an exam guide. Paste the guide's PDF URL; the backend downloads it,
-extracts the text (`pypdf`), and asks a Foundation Model
-(`databricks-claude-sonnet-5`, via the endpoint's OpenAI-compatible
-`/invocations` route with a strict JSON schema) to produce the exam outline
-(domains + weights) and questions tagged by domain. Newly discovered domains
-are merged into the cert (existing domains keep their id + mastery).
+```json
+[
+  {
+    "id": "aws-saa",
+    "provider": "Amazon Web Services",
+    "name": "Certified Solutions Architect – Associate",
+    "shortName": "Solutions Architect Associate",
+    "status": "scheduled",
+    "examDate": "2026-12-01",
+    "passingScore": 72
+  }
+]
+```
 
-**Generation is asynchronous.** A single model call for the whole test exceeds
-the Databricks Apps proxy's 300s request cap, so `POST .../quiz/generate` marks
-the row `quiz_status = 'generating'`, starts a background thread, and returns
-`202` immediately. The thread runs generation in two phases — one call for the
-outline, then question batches (5 each) **in parallel** across a thread pool, so
-the whole thing finishes in well under a minute (~45s) instead of timing out.
-The frontend polls `GET /api/certifications/{id}` every 4s until `quiz_status`
-clears (done) or becomes `'error'` (message stored in `quiz_error`).
+`status` is one of `queued`, `in-progress`, `scheduled`, or `passed`.
 
-Taking a quiz opens a **full-screen, distraction-free view** (its own route,
-`#/quiz/<certId>`, rendered outside the sidebar shell — one question at a time,
-keyboard-first). On finish it logs a normal practice attempt (overall score) and
-updates each tested domain's mastery — so it flows into the same sparkline,
-readiness, and weighted-mastery views as a manually logged test.
+## Usage
+
+1. **Add a certification** from the Certifications page: provider, name, exam
+   date, and passing score.
+2. **Add its topics** (exam domains) and rate your mastery of each one. The
+   dashboard uses these ratings to show what to study next.
+3. **Log practice tests** as you take them. Scores below the passing line are
+   flagged so you know where to focus.
+4. **Generate a practice test:** on the dashboard's *Practice tests* card, paste
+   the URL of the official exam guide PDF. Generation runs in the background and
+   takes about a minute. Then click **Take practice test**.
+5. **Mark it passed** when you're done, with your score and credential link.
+
+Practice-test keyboard shortcuts:
+
+| Key | Action |
+|-----|--------|
+| `1`–`4` | Choose an answer |
+| `Enter` / `→` | Next question |
+| `←` | Previous question |
+| `Esc` | Close a certification's detail panel |
 
 ## Local development
 
-**Frontend** (UI work; needs a backend for data):
-
 ```bash
-npm install
+npm ci
 npm run dev        # http://localhost:5173
+npm run build      # type-check (tsc) and production build
 ```
 
-`npm run dev` alone has no `/api` backend, so the app shows its error state. To
-develop the UI against **live** data, proxy `/api` to the deployed app with an
-OAuth token (dev-only):
+`npm run dev` starts only the frontend, and with no backend the app shows its
+error state. To work on the UI with real data, point the dev server at your
+deployed app with a short-lived token:
 
 ```bash
 CERTUS_API=<your-app-url> \
@@ -124,50 +167,70 @@ CERTUS_TOKEN=$(databricks auth token -p <your-profile> | python3 -c 'import sys,
 npm run dev
 ```
 
-(`vite.config.ts` wires this proxy only when `CERTUS_API` is set.)
+The token expires after about an hour, so rerun the command to refresh it.
 
-**Build / typecheck:** `npm run build` (runs `tsc --noEmit` then `vite build`).
+The backend runs only inside Databricks Apps. Its database credentials come from
+the app's own identity, so there's no local backend setup.
 
-> Running the FastAPI backend locally against Lakebase requires deploy-first (the
-> app's service principal must own the `certus` schema). See Deployment.
+## How it works
 
-## Deployment (Databricks App + Lakebase)
-
-Prereqs: Databricks CLI ≥ 1.x authenticated to the `<your-profile>` profile. The
-app (`certus`) and Lakebase project (`certus`) already exist; the `postgres`
-resource is attached to the app.
-
-```bash
-# 1. Build the frontend
-npm run build
-
-# 2. Stage a clean dir (app.yaml + requirements.txt + server/ + dist/ only — no node_modules)
-#    then upload and deploy:
-databricks sync <staged-dir> /Workspace/Users/<you>/certus --profile <your-profile>
-databricks apps deploy certus --source-code-path /Workspace/Users/<you>/certus --profile <your-profile>
-
-# 3. Verify
-databricks apps logs certus --profile <your-profile>      # want "Application startup complete"
+```
+Browser ──▶ Databricks Apps (sign-in) ──▶ FastAPI  (server/app.py)
+                                            ├─ /api/certifications ──▶ Lakebase Postgres
+                                            ├─ practice tests      ──▶ Foundation Model API
+                                            └─ static files        ──▶ dist/ (React app)
 ```
 
-On first startup the backend creates the `certus` schema + table and seeds from
-`server/seed.json` if that file exists and the table is empty. The file is
-gitignored — drop your own array of certifications there to bootstrap.
+- **Frontend:** React 18, TypeScript, and Vite, styled with CSS Modules, with a
+  small built-in hash router (`#/dashboard`, `#/quiz/<certId>`, …). The code is
+  in `src/`: pages in `src/pages/`, components in `src/components/`, and the API
+  client in `src/lib/api.ts`.
+- **Backend:** a single FastAPI app serves both the built frontend and the API,
+  so there's one process and one origin (no CORS).
+- **Data:** a single table, `certus.certifications`. Each cert's topics,
+  practice attempts, materials, and quiz questions are stored as JSONB columns,
+  so a row matches the frontend's `Certification` type one-to-one.
+- **Practice tests:** the backend downloads the guide PDF and extracts its text.
+  It asks the model for the exam outline, then asks for questions in parallel
+  batches of 5. This runs in a background thread because Databricks Apps cuts
+  off requests at 300 seconds. The frontend polls until the quiz is ready.
 
-### Gotchas (learned the hard way)
+### API
 
-- **Port:** the Apps runtime does **not** expand `${DATABRICKS_APP_PORT}` inside
-  `command` args, so `app.yaml` runs uvicorn through `sh -c` to let the shell expand it.
-- **SDK:** the runtime preinstalls an old `databricks-sdk` without `w.postgres`;
-  `requirements.txt` pins `databricks-sdk>=0.91.0` so pip upgrades it.
-- **Schema ownership:** deploy before any local DB work so the service principal
-  owns the schema (otherwise `permission denied`).
+| Method | Route | Purpose |
+|--------|-------|---------|
+| `GET` | `/api/certifications` | List all certifications |
+| `GET` | `/api/certifications/{id}` | Get one (also used to poll quiz generation) |
+| `POST` | `/api/certifications` | Add one |
+| `PATCH` | `/api/certifications/{id}` | Update some fields |
+| `DELETE` | `/api/certifications/{id}` | Remove one |
+| `POST` | `/api/certifications/{id}/quiz/generate` | Start generating a practice test (returns `202`) |
 
-## Design
+## Troubleshooting
 
-This project has a committed design system — read before UI work:
+- **The app won't start / `w.postgres` is missing.** Databricks Apps comes with
+  an old `databricks-sdk` preinstalled. `requirements.txt` requires
+  `databricks-sdk>=0.91.0`, so check that the file was included in your deploy.
+- **`permission denied for schema certus`.** The app's own identity needs to
+  own the `certus` schema. To ensure it does, deploy the app first and let it
+  create the schema, before connecting to the database any other way.
+- **Port errors on startup.** Databricks Apps doesn't expand
+  `${DATABRICKS_APP_PORT}` inside `command` arguments. That's why `app.yaml`
+  starts uvicorn through `sh -c`. Keep it that way.
+- **Practice-test generation fails with a permission error.** Add the
+  `databricks-claude-sonnet-5` serving endpoint to the app as a resource with
+  **Can query**.
 
-- **`PRODUCT.md`** — strategy, users, voice (warm, encouraging, quietly confident).
-- **`DESIGN.md`** — the visual system, North Star **"The Warm Ledger"** (faint rose
-  page, white cards, one deep-rose accent for progress/success; amber below the
-  passing line; blue for booked exams). Light + dark, WCAG AA, keyboard-first.
+## Further reading
+
+- [`PRODUCT.md`](PRODUCT.md): who the app is for, its purpose, and its voice.
+- [`DESIGN.md`](DESIGN.md): the visual design system, "The Warm Ledger".
+
+## License
+
+[MIT](LICENSE) © 2026 Augusto Carneiro
+
+## Contact
+
+Built by Augusto Carneiro ([@cwrneiro](https://github.com/cwrneiro)). Found a
+bug or have an idea? [Open an issue](https://github.com/cwrneiro/certus/issues).
