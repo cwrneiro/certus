@@ -11,13 +11,13 @@ for the full architecture, data model, API, local dev, and deployment runbook.
   UI reads (data lives in Lakebase).
 - **Backend:** FastAPI (`server/app.py`) serves the built `dist/` **and** a CRUD
   API (`/api/certifications`) over **Lakebase Postgres** (schema `certus`, nested
-  arrays as JSONB). Seeds from `server/seed.json` only when the table is empty.
+  arrays as JSONB). Seeds from an optional, gitignored `server/seed.json` when the table is empty.
 - **Hosting:** Databricks App `certus` (CLI profile `<your-profile>`). Lakebase project
   `certus`. Deploy/gotchas are in `README.md` (port `sh -c`, `databricks-sdk>=0.91.0`,
   deploy-first for schema ownership).
 
 When you change TypeScript types in `src/data/types.ts`, keep the backend
-(`server/app.py` row mapping + inserts) and `server/seed.json` in sync.
+(`server/app.py` row mapping + inserts) in sync.
 
 ## Design Context
 

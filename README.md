@@ -47,8 +47,7 @@ ever serves `/` and hashed asset paths — no history-fallback rewriting needed.
 │   ├── data/types.ts       # Shared TypeScript types (Certification, Domain, …)
 │   └── styles/             # tokens.css (design tokens) + base.css (reset)
 ├── server/
-│   ├── app.py              # FastAPI: schema init, seed, CRUD API, static serving
-│   └── seed.json           # Bootstrap data (inserted only when the table is empty)
+│   └── app.py              # FastAPI: schema init, seed, CRUD API, static serving
 ├── requirements.txt        # Python deps (fastapi, uvicorn, psycopg, databricks-sdk)
 ├── app.yaml                # Databricks Apps runtime config (command + LAKEBASE_ENDPOINT)
 ├── PRODUCT.md              # Product strategy & voice
@@ -152,7 +151,8 @@ databricks apps logs certus --profile <your-profile>      # want "Application st
 ```
 
 On first startup the backend creates the `certus` schema + table and seeds from
-`server/seed.json` (only if empty).
+`server/seed.json` if that file exists and the table is empty. The file is
+gitignored — drop your own array of certifications there to bootstrap.
 
 ### Gotchas (learned the hard way)
 

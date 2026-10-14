@@ -28,8 +28,8 @@ Deploy the full-screen-view commit (see README), then open a PR from
 - Batches slightly over-produce (asked 15, got ~20) — harmless.
 - Model call uses `api_client.do` on `/serving-endpoints/{model}/invocations`
   (robust across SDK versions; accepts response_format).
-- Keep `src/data/types.ts`, `server/app.py` (row mapping + inserts), and
-  `server/seed.json` in sync when types change.
+- Keep `src/data/types.ts` and `server/app.py` (row mapping + inserts) in
+  sync when types change.
 - Deploy-first: the app's service principal must own the `certus` Lakebase
   schema before local DB work (`README.md` → Deployment → Gotchas).
 - Repo is sanitized for public GitHub: docs use `<your-profile>` / `<your-app-url>`
