@@ -32,3 +32,6 @@ Deploy the full-screen-view commit (see README), then open a PR from
   `server/seed.json` in sync when types change.
 - Deploy-first: the app's service principal must own the `certus` Lakebase
   schema before local DB work (`README.md` → Deployment → Gotchas).
+- Repo is sanitized for public GitHub: docs use `<your-profile>` / `<your-app-url>`
+  placeholders (real values are in local Claude memory, not the repo), and
+  `package-lock.json` resolves from registry.npmjs.org. History was rewritten.

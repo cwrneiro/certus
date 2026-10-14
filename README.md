@@ -4,8 +4,7 @@ A calm, warm home base for studying toward professional certifications: centrali
 study material, track exam prep and progress, and keep every earned credential in
 one place.
 
-**Live app:** <your-app-url>
-(deployed as a Databricks App on the `<your-profile>` workspace; sign-in required).
+Deployed as a Databricks App (sign-in required).
 
 ---
 

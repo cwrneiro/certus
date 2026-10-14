@@ -12,8 +12,7 @@ for the full architecture, data model, API, local dev, and deployment runbook.
 - **Backend:** FastAPI (`server/app.py`) serves the built `dist/` **and** a CRUD
   API (`/api/certifications`) over **Lakebase Postgres** (schema `certus`, nested
   arrays as JSONB). Seeds from `server/seed.json` only when the table is empty.
-- **Hosting:** Databricks App `certus` on profile **<your-profile>**
-  (<your-app-url>). Lakebase project
+- **Hosting:** Databricks App `certus` (CLI profile `<your-profile>`). Lakebase project
   `certus`. Deploy/gotchas are in `README.md` (port `sh -c`, `databricks-sdk>=0.91.0`,
   deploy-first for schema ownership).
 
